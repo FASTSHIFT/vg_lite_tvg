@@ -144,13 +144,14 @@ typedef vg_lite_float_t FLOATVECTOR4[4];
  *  STATIC PROTOTYPES
  **********************/
 
-static Result shape_append_path(std::unique_ptr<Shape>& shape, vg_lite_path_t* path, vg_lite_matrix_t* matrix);
-static Result shape_append_rect(std::unique_ptr<Shape>& shape, const vg_lite_buffer_t* target, const vg_lite_rectangle_t* rect);
-static Result canvas_set_target(vg_lite_ctx* ctx, vg_lite_buffer_t* target);
 static vg_lite_error_t vg_lite_error_conv(Result result);
 static Matrix matrix_conv(const vg_lite_matrix_t* matrix);
 static FillRule fill_rule_conv(vg_lite_fill_t fill);
 static BlendMethod blend_method_conv(vg_lite_blend_t blend);
+static Result shape_append_path(std::unique_ptr<Shape>& shape, vg_lite_path_t* path, vg_lite_matrix_t* matrix);
+static Result shape_append_rect(std::unique_ptr<Shape>& shape, const vg_lite_buffer_t* target, const vg_lite_rectangle_t* rect);
+static Result canvas_set_target(vg_lite_ctx* ctx, vg_lite_buffer_t* target);
+static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, const vg_lite_buffer_t* source);
 
 static void ClampColor(FLOATVECTOR4 Source, FLOATVECTOR4 Target, uint8_t Premultiplied);
 static uint8_t PackColorComponent(vg_lite_float_t value);
@@ -208,124 +209,6 @@ vg_lite_error_t vg_lite_clear(vg_lite_buffer_t* target, vg_lite_rectangle_t* rec
     TVG_CHECK_RETURN_VG_ERROR(ctx->canvas->push(std::move(shape)));
 
     return VG_LITE_SUCCESS;
-}
-
-static uint32_t get_palette_size(vg_lite_buffer_format_t format)
-{
-    uint32_t size = 0;
-    switch (format) {
-    case VG_LITE_INDEX_1:
-        size = 1 << 1;
-        break;
-    case VG_LITE_INDEX_2:
-        size = 1 << 2;
-        break;
-    case VG_LITE_INDEX_4:
-    case VG_LITE_A4:
-        size = 1 << 4;
-        break;
-    case VG_LITE_INDEX_8:
-    case VG_LITE_A8:
-        size = 1 << 8;
-        break;
-    default:
-        TVG_LOG("unsupport format: %d\n", format);
-        break;
-    }
-    return size;
-}
-
-static bool decode_indexed_line(
-    vg_lite_buffer_format_t color_format,
-    const uint32_t* palette,
-    int32_t x, int32_t y,
-    int32_t w_px, const uint8_t* in, uint32_t* out)
-{
-    uint8_t px_size;
-    uint16_t mask;
-
-    out += w_px * y;
-
-    int32_t w_byte = 0;
-    int8_t shift = 0;
-    switch (color_format) {
-    case VG_LITE_INDEX_1:
-        px_size = 1;
-        w_byte = (w_px + 7) >> 3; /*E.g. w = 20 -> w = 2 + 1*/
-        in += w_byte * y; /*First pixel*/
-        in += x / 8; /*8pixel per byte*/
-        shift = 7 - (x & 0x7);
-        break;
-    case VG_LITE_INDEX_2:
-        px_size = 2;
-        w_byte = (w_px + 3) >> 2; /*E.g. w = 13 -> w = 3 + 1 (bytes)*/
-        in += w_byte * y; /*First pixel*/
-        in += x / 4; /*4pixel per byte*/
-        shift = 6 - 2 * (x & 0x3);
-        break;
-    case VG_LITE_INDEX_4:
-        px_size = 4;
-        w_byte = (w_px + 1) >> 1; /*E.g. w = 13 -> w = 6 + 1 (bytes)*/
-        in += w_byte * y; /*First pixel*/
-        in += x / 2; /*2pixel per byte*/
-        shift = 4 - 4 * (x & 0x1);
-        break;
-    case VG_LITE_INDEX_8:
-        px_size = 8;
-        w_byte = w_px;
-        in += w_byte * y; /*First pixel*/
-        in += x;
-        shift = 0;
-        break;
-    default:
-        return false;
-    }
-
-    mask = (1 << px_size) - 1; /*E.g. px_size = 2; mask = 0x03*/
-
-    int32_t i;
-    for (i = 0; i < w_px; i++) {
-        uint8_t val_act = (*in >> shift) & mask;
-        out[i] = palette[val_act];
-
-        shift -= px_size;
-        if (shift < 0) {
-            shift = 8 - px_size;
-            in++;
-        }
-    }
-    return true;
-}
-
-static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, const vg_lite_buffer_t* source)
-{
-    uint32_t* image_buffer;
-    if (source->format == VG_LITE_BGRA8888) {
-        image_buffer = (uint32_t*)source->memory;
-    } else {
-        uint32_t width = source->width;
-        uint32_t height = source->height;
-
-        image_buffer = ctx->get_image_buffer(width, height);
-
-        if (IS_INDEX_FMT(source->format)) {
-            uint32_t palette_size = get_palette_size(source->format);
-            uint32_t* clut_colors = ctx->get_CLUT().data();
-            TVG_ASSERT(clut_colors != nullptr);
-            TVG_ASSERT(palette_size == ctx->get_CLUT().size());
-
-            const uint8_t* px_map = (uint8_t*)source->memory + palette_size * sizeof(uint32_t);
-            uint32_t* out = image_buffer;
-
-            for (uint32_t y = 0; y < height; y++) {
-                decode_indexed_line(source->format, clut_colors, 0, y, width, px_map, out);
-            }
-        }
-    }
-
-    TVG_CHECK_RETURN_RESULT(picture->load(image_buffer, source->width, source->height, true));
-
-    return Result::Success;
 }
 
 vg_lite_error_t vg_lite_blit(vg_lite_buffer_t* target,
@@ -1472,6 +1355,73 @@ vg_lite_error_t vg_lite_set_command_buffer(uint32_t physical, uint32_t size)
  *   STATIC FUNCTIONS
  **********************/
 
+static vg_lite_error_t vg_lite_error_conv(Result result)
+{
+    switch (result) {
+    case Result::Success:
+        return VG_LITE_SUCCESS;
+
+    case Result::InvalidArguments:
+        return VG_LITE_INVALID_ARGUMENT;
+
+    case Result::InsufficientCondition:
+        return VG_LITE_OUT_OF_RESOURCES;
+
+    case Result::FailedAllocation:
+        return VG_LITE_OUT_OF_MEMORY;
+
+    case Result::NonSupport:
+        return VG_LITE_NOT_SUPPORT;
+
+    default:
+        break;
+    }
+
+    return VG_LITE_TIMEOUT;
+}
+
+static Matrix matrix_conv(const vg_lite_matrix_t* matrix)
+{
+    return *(Matrix*)matrix;
+}
+
+static FillRule fill_rule_conv(vg_lite_fill_t fill)
+{
+    if (fill == VG_LITE_FILL_EVEN_ODD) {
+        return FillRule::EvenOdd;
+    }
+
+    return FillRule::Winding;
+}
+
+static BlendMethod blend_method_conv(vg_lite_blend_t blend)
+{
+    switch (blend) {
+    case VG_LITE_BLEND_NONE:
+        return BlendMethod::SrcOver;
+
+    case VG_LITE_BLEND_NORMAL_LVGL:
+        return BlendMethod::Normal;
+
+    case VG_LITE_BLEND_SRC_OVER:
+        return BlendMethod::PreNormal;
+
+    case VG_LITE_BLEND_SCREEN:
+        return BlendMethod::Screen;
+
+    case VG_LITE_BLEND_ADDITIVE:
+        return BlendMethod::Add;
+
+    case VG_LITE_BLEND_MULTIPLY:
+        return BlendMethod::Multiply;
+
+    default:
+        break;
+    }
+
+    return BlendMethod::Normal;
+}
+
 static float vlc_get_arg(const void* data, vg_lite_format_t format)
 {
     switch (format) {
@@ -1650,71 +1600,121 @@ static Result canvas_set_target(vg_lite_ctx* ctx, vg_lite_buffer_t* target)
     return res;
 }
 
-static vg_lite_error_t vg_lite_error_conv(Result result)
+static uint32_t get_palette_size(vg_lite_buffer_format_t format)
 {
-    switch (result) {
-    case Result::Success:
-        return VG_LITE_SUCCESS;
-
-    case Result::InvalidArguments:
-        return VG_LITE_INVALID_ARGUMENT;
-
-    case Result::InsufficientCondition:
-        return VG_LITE_OUT_OF_RESOURCES;
-
-    case Result::FailedAllocation:
-        return VG_LITE_OUT_OF_MEMORY;
-
-    case Result::NonSupport:
-        return VG_LITE_NOT_SUPPORT;
-
+    uint32_t size = 0;
+    switch (format) {
+    case VG_LITE_INDEX_1:
+        size = 1 << 1;
+        break;
+    case VG_LITE_INDEX_2:
+        size = 1 << 2;
+        break;
+    case VG_LITE_INDEX_4:
+    case VG_LITE_A4:
+        size = 1 << 4;
+        break;
+    case VG_LITE_INDEX_8:
+    case VG_LITE_A8:
+        size = 1 << 8;
+        break;
     default:
+        TVG_LOG("unsupport format: %d\n", format);
         break;
     }
-
-    return VG_LITE_TIMEOUT;
+    return size;
 }
 
-static Matrix matrix_conv(const vg_lite_matrix_t* matrix)
+static bool decode_indexed_line(
+    vg_lite_buffer_format_t color_format,
+    const uint32_t* palette,
+    int32_t x, int32_t y,
+    int32_t w_px, const uint8_t* in, uint32_t* out)
 {
-    return *(Matrix*)matrix;
-}
+    uint8_t px_size;
+    uint16_t mask;
 
-static FillRule fill_rule_conv(vg_lite_fill_t fill)
-{
-    if (fill == VG_LITE_FILL_EVEN_ODD) {
-        return FillRule::EvenOdd;
-    }
+    out += w_px * y;
 
-    return FillRule::Winding;
-}
-
-static BlendMethod blend_method_conv(vg_lite_blend_t blend)
-{
-    switch (blend) {
-    case VG_LITE_BLEND_NONE:
-        return BlendMethod::SrcOver;
-
-    case VG_LITE_BLEND_NORMAL_LVGL:
-        return BlendMethod::Normal;
-
-    case VG_LITE_BLEND_SRC_OVER:
-        return BlendMethod::PreNormal;
-
-    case VG_LITE_BLEND_SCREEN:
-        return BlendMethod::Screen;
-
-    case VG_LITE_BLEND_ADDITIVE:
-        return BlendMethod::Add;
-
-    case VG_LITE_BLEND_MULTIPLY:
-        return BlendMethod::Multiply;
-
-    default:
+    int32_t w_byte = 0;
+    int8_t shift = 0;
+    switch (color_format) {
+    case VG_LITE_INDEX_1:
+        px_size = 1;
+        w_byte = (w_px + 7) >> 3; /*E.g. w = 20 -> w = 2 + 1*/
+        in += w_byte * y; /*First pixel*/
+        in += x / 8; /*8pixel per byte*/
+        shift = 7 - (x & 0x7);
         break;
+    case VG_LITE_INDEX_2:
+        px_size = 2;
+        w_byte = (w_px + 3) >> 2; /*E.g. w = 13 -> w = 3 + 1 (bytes)*/
+        in += w_byte * y; /*First pixel*/
+        in += x / 4; /*4pixel per byte*/
+        shift = 6 - 2 * (x & 0x3);
+        break;
+    case VG_LITE_INDEX_4:
+        px_size = 4;
+        w_byte = (w_px + 1) >> 1; /*E.g. w = 13 -> w = 6 + 1 (bytes)*/
+        in += w_byte * y; /*First pixel*/
+        in += x / 2; /*2pixel per byte*/
+        shift = 4 - 4 * (x & 0x1);
+        break;
+    case VG_LITE_INDEX_8:
+        px_size = 8;
+        w_byte = w_px;
+        in += w_byte * y; /*First pixel*/
+        in += x;
+        shift = 0;
+        break;
+    default:
+        return false;
     }
 
-    return BlendMethod::Normal;
+    mask = (1 << px_size) - 1; /*E.g. px_size = 2; mask = 0x03*/
+
+    int32_t i;
+    for (i = 0; i < w_px; i++) {
+        uint8_t val_act = (*in >> shift) & mask;
+        out[i] = palette[val_act];
+
+        shift -= px_size;
+        if (shift < 0) {
+            shift = 8 - px_size;
+            in++;
+        }
+    }
+    return true;
+}
+
+static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, const vg_lite_buffer_t* source)
+{
+    uint32_t* image_buffer;
+    if (source->format == VG_LITE_BGRA8888) {
+        image_buffer = (uint32_t*)source->memory;
+    } else {
+        uint32_t width = source->width;
+        uint32_t height = source->height;
+
+        image_buffer = ctx->get_image_buffer(width, height);
+
+        if (IS_INDEX_FMT(source->format)) {
+            uint32_t palette_size = get_palette_size(source->format);
+            uint32_t* clut_colors = ctx->get_CLUT().data();
+            TVG_ASSERT(clut_colors != nullptr);
+            TVG_ASSERT(palette_size == ctx->get_CLUT().size());
+
+            const uint8_t* px_map = (uint8_t*)source->memory + palette_size * sizeof(uint32_t);
+
+            for (uint32_t y = 0; y < height; y++) {
+                decode_indexed_line(source->format, clut_colors, 0, y, width, px_map, image_buffer);
+            }
+        }
+    }
+
+    TVG_CHECK_RETURN_RESULT(picture->load(image_buffer, source->width, source->height, true));
+
+    return Result::Success;
 }
 
 static void ClampColor(FLOATVECTOR4 Source, FLOATVECTOR4 Target, uint8_t Premultiplied)
