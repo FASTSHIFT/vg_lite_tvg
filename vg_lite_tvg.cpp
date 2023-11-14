@@ -48,7 +48,7 @@
 #define MAX(a, b) (a) > (b) ? (a) : (b)
 #define LERP(v1, v2, w) ((v1) * (w) + (v2) * (1.0f - (w)))
 #define CLAMP(x, min, max) (((x) < (min)) ? (min) : ((x) > (max)) ? (max) : (x))
-#define COLOR_FROM_RAMP(ColorRamp)  (((vg_lite_float_t *) ColorRamp) + 1)
+#define COLOR_FROM_RAMP(ColorRamp) (((vg_lite_float_t*)ColorRamp) + 1)
 #define VG_LITE_RETURN_ERROR(func)         \
     if ((error = func) != VG_LITE_SUCCESS) \
     return error
@@ -113,8 +113,9 @@ public:
         return image_buffer;
     }
 
-    void set_CLUT(uint32_t count, uint32_t* colors)
+    void set_CLUT(uint32_t count, const uint32_t* colors)
     {
+        clut_colors.clear();
         for (uint32_t i = 0; i < count; ++i) {
             clut_colors.push_back(colors[i]);
         }
@@ -137,7 +138,7 @@ private:
     std::vector<uint32_t> clut_colors;
 };
 
-typedef vg_lite_float_t  FLOATVECTOR4[4];
+typedef vg_lite_float_t FLOATVECTOR4[4];
 
 /**********************
  *  STATIC PROTOTYPES
@@ -308,10 +309,12 @@ static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, 
         image_buffer = ctx->get_image_buffer(width, height);
 
         if (IS_INDEX_FMT(source->format)) {
-            uint32_t palette_size = get_palette_size(source->format) * sizeof(uint32_t);
+            uint32_t palette_size = get_palette_size(source->format);
             uint32_t* clut_colors = ctx->get_CLUT().data();
             TVG_ASSERT(clut_colors != nullptr);
-            const uint8_t* px_map = (uint8_t*)source->memory + palette_size;
+            TVG_ASSERT(palette_size == ctx->get_CLUT().size());
+
+            const uint8_t* px_map = (uint8_t*)source->memory + palette_size * sizeof(uint32_t);
             uint32_t* out = image_buffer;
 
             for (uint32_t y = 0; y < height; y++) {
