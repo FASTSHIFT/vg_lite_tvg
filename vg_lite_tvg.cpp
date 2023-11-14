@@ -52,6 +52,8 @@
 #define VG_LITE_RETURN_ERROR(func)         \
     if ((error = func) != VG_LITE_SUCCESS) \
     return error
+#define VG_LITE_ALIGN(number, align_bytes) \
+    (((number) + ((align_bytes)-1)) & ~((align_bytes)-1))
 
 #define TVG_ASSERT(expr) assert(expr)
 #define TVG_CANVAS_ENGINE CanvasEngine::Sw
@@ -175,12 +177,46 @@ static void get_format_bytes(vg_lite_buffer_format_t format,
 extern "C" {
 vg_lite_error_t vg_lite_allocate(vg_lite_buffer_t* buffer)
 {
-    return VG_LITE_NOT_SUPPORT;
+#if gcFEATURE_VG_TRACE_API
+    VGLITE_LOG("vg_lite_allocate %p\n", buffer);
+#endif
+
+    if (buffer->format == VG_LITE_RGBA8888_ETC2_EAC && (buffer->width % 16 || buffer->height % 4)) {
+        return VG_LITE_INVALID_ARGUMENT;
+    }
+
+    /* Reset planar. */
+    buffer->yuv.uv_planar = buffer->yuv.v_planar = buffer->yuv.alpha_planar = 0;
+
+    /* Align height in case format is tiled. */
+    if (buffer->format >= VG_LITE_YUY2 && buffer->format <= VG_LITE_NV16) {
+        buffer->height = VG_LITE_ALIGN(buffer->height, 4);
+        buffer->yuv.swizzle = VG_LITE_SWIZZLE_UV;
+    }
+
+    if (buffer->format >= VG_LITE_YUY2_TILED && buffer->format <= VG_LITE_AYUY2_TILED) {
+        buffer->height = VG_LITE_ALIGN(buffer->height, 4);
+        buffer->tiled = VG_LITE_TILED;
+        buffer->yuv.swizzle = VG_LITE_SWIZZLE_UV;
+    }
+
+    uint32_t mul, div, align;
+    get_format_bytes(buffer->format, &mul, &div, &align);
+    uint32_t stride = VG_LITE_ALIGN((buffer->width * mul / div), align);
+
+    buffer->stride = stride;
+    buffer->memory = malloc(stride * buffer->height);
+    TVG_ASSERT(buffer->memory);
+    buffer->address = (uint32_t)(uintptr_t)buffer->memory;
+    return VG_LITE_SUCCESS;
 }
 
 vg_lite_error_t vg_lite_free(vg_lite_buffer_t* buffer)
 {
-    return VG_LITE_NOT_SUPPORT;
+    TVG_ASSERT(buffer->memory);
+    free(buffer->memory);
+    memset(buffer, 0, sizeof(vg_lite_buffer_t));
+    return VG_LITE_SUCCESS;
 }
 
 vg_lite_error_t vg_lite_upload_buffer(vg_lite_buffer_t* buffer, uint8_t* data[3], uint32_t stride[3])
@@ -239,6 +275,10 @@ vg_lite_error_t vg_lite_blit2(vg_lite_buffer_t* target,
     vg_lite_blend_t blend,
     vg_lite_filter_t filter)
 {
+    if (!vg_lite_query_feature(gcFEATURE_BIT_VG_DOUBLE_IMAGE)) {
+        return VG_LITE_NOT_SUPPORT;
+    }
+
     auto ctx = vg_lite_ctx::getInstance();
     canvas_set_target(ctx, target);
 
