@@ -95,6 +95,7 @@ public:
         : has_commit(false)
         , image_buffer(nullptr)
         , image_buffer_size(0)
+        , dither_enable(false)
     {
         canvas = SwCanvas::gen();
     }
@@ -128,16 +129,22 @@ public:
         return clut_colors;
     }
 
-    static vg_lite_ctx* getInstance()
+    static vg_lite_ctx* get_instance()
     {
         static vg_lite_ctx instance;
         return &instance;
+    }
+
+    void set_dither(bool enable)
+    {
+        dither_enable = enable;
     }
 
 private:
     uint32_t* image_buffer;
     size_t image_buffer_size;
     std::vector<uint32_t> clut_colors;
+    bool dither_enable;
 };
 
 typedef vg_lite_float_t FLOATVECTOR4[4];
@@ -236,7 +243,7 @@ vg_lite_error_t vg_lite_unmap(vg_lite_buffer_t* buffer)
 
 vg_lite_error_t vg_lite_clear(vg_lite_buffer_t* target, vg_lite_rectangle_t* rectangle, vg_lite_color_t color)
 {
-    auto ctx = vg_lite_ctx::getInstance();
+    auto ctx = vg_lite_ctx::get_instance();
     TVG_CHECK_RETURN_VG_ERROR(canvas_set_target(ctx, target));
 
     auto shape = Shape::gen();
@@ -254,7 +261,7 @@ vg_lite_error_t vg_lite_blit(vg_lite_buffer_t* target,
     vg_lite_color_t color,
     vg_lite_filter_t filter)
 {
-    auto ctx = vg_lite_ctx::getInstance();
+    auto ctx = vg_lite_ctx::get_instance();
     canvas_set_target(ctx, target);
 
     auto picture = Picture::gen();
@@ -279,7 +286,7 @@ vg_lite_error_t vg_lite_blit2(vg_lite_buffer_t* target,
         return VG_LITE_NOT_SUPPORT;
     }
 
-    auto ctx = vg_lite_ctx::getInstance();
+    auto ctx = vg_lite_ctx::get_instance();
     canvas_set_target(ctx, target);
 
     auto picture0 = tvg::Picture::gen();
@@ -305,7 +312,7 @@ vg_lite_error_t vg_lite_blit_rect(vg_lite_buffer_t* target,
     vg_lite_color_t color,
     vg_lite_filter_t filter)
 {
-    auto ctx = vg_lite_ctx::getInstance();
+    auto ctx = vg_lite_ctx::get_instance();
     TVG_CHECK_RETURN_VG_ERROR(canvas_set_target(ctx, target));
 
     auto shape = Shape::gen();
@@ -344,7 +351,7 @@ vg_lite_error_t vg_lite_close(void)
 
 vg_lite_error_t vg_lite_finish(void)
 {
-    vg_lite_ctx* ctx = vg_lite_ctx::getInstance();
+    vg_lite_ctx* ctx = vg_lite_ctx::get_instance();
     if (!ctx->has_commit) {
         return VG_LITE_SUCCESS;
     }
@@ -362,7 +369,7 @@ vg_lite_error_t vg_lite_finish(void)
 
 vg_lite_error_t vg_lite_flush(void)
 {
-    vg_lite_ctx* ctx = vg_lite_ctx::getInstance();
+    vg_lite_ctx* ctx = vg_lite_ctx::get_instance();
     ctx->has_commit = true;
     return VG_LITE_SUCCESS;
 }
@@ -374,7 +381,7 @@ vg_lite_error_t vg_lite_draw(vg_lite_buffer_t* target,
     vg_lite_blend_t blend,
     vg_lite_color_t color)
 {
-    auto ctx = vg_lite_ctx::getInstance();
+    auto ctx = vg_lite_ctx::get_instance();
     TVG_CHECK_RETURN_VG_ERROR(canvas_set_target(ctx, target));
 
     auto shape = Shape::gen();
@@ -509,7 +516,7 @@ vg_lite_error_t vg_lite_upload_path(vg_lite_path_t* path)
 vg_lite_error_t vg_lite_set_CLUT(uint32_t count,
     uint32_t* colors)
 {
-    auto ctx = vg_lite_ctx::getInstance();
+    auto ctx = vg_lite_ctx::get_instance();
     ctx->set_CLUT(count, colors);
     return VG_LITE_SUCCESS;
 }
@@ -525,7 +532,7 @@ vg_lite_error_t vg_lite_draw_pattern(vg_lite_buffer_t* target,
     vg_lite_color_t pattern_color,
     vg_lite_filter_t filter)
 {
-    auto ctx = vg_lite_ctx::getInstance();
+    auto ctx = vg_lite_ctx::get_instance();
     TVG_CHECK_RETURN_VG_ERROR(canvas_set_target(ctx, target));
 
     auto shape = Shape::gen();
@@ -1375,8 +1382,25 @@ vg_lite_error_t vg_lite_set_flexa_stop_frame(void)
     return VG_LITE_NOT_SUPPORT;
 }
 
-vg_lite_error_t vg_lite_set_dither(int enable)
+vg_lite_error_t vg_lite_enable_dither(void)
 {
+    if (vg_lite_query_feature(gcFEATURE_BIT_VG_DITHER)) {
+        return VG_LITE_SUCCESS;
+    }
+
+    vg_lite_ctx::get_instance()->set_dither(true);
+
+    return VG_LITE_NOT_SUPPORT;
+}
+
+vg_lite_error_t vg_lite_disable_dither(void)
+{
+    if (vg_lite_query_feature(gcFEATURE_BIT_VG_DITHER)) {
+        return VG_LITE_SUCCESS;
+    }
+
+    vg_lite_ctx::get_instance()->set_dither(false);
+
     return VG_LITE_NOT_SUPPORT;
 }
 
