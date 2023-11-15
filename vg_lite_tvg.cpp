@@ -1703,11 +1703,9 @@ static uint32_t get_palette_size(vg_lite_buffer_format_t format)
         size = 1 << 2;
         break;
     case VG_LITE_INDEX_4:
-    case VG_LITE_A4:
         size = 1 << 4;
         break;
     case VG_LITE_INDEX_8:
-    case VG_LITE_A8:
         size = 1 << 8;
         break;
     default:
@@ -1868,6 +1866,7 @@ static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, 
 
         default:
             TVG_LOG("unsupport format: %d\n", source->format);
+            TVG_ASSERT(false);
             break;
         }
     }
