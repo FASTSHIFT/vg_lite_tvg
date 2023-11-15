@@ -1468,7 +1468,7 @@ static BlendMethod blend_method_conv(vg_lite_blend_t blend)
         return BlendMethod::Normal;
 
     case VG_LITE_BLEND_SRC_OVER:
-        return BlendMethod::PreNormal;
+        return BlendMethod::Normal;
 
     case VG_LITE_BLEND_SCREEN:
         return BlendMethod::Screen;
@@ -1689,6 +1689,17 @@ static uint32_t get_palette_size(vg_lite_buffer_format_t format)
     return size;
 }
 
+static uint32_t width_to_stride(uint32_t w, vg_lite_buffer_format_t color_format)
+{
+    if (vg_lite_query_feature(gcFEATURE_BIT_VG_16PIXELS_ALIGN)) {
+        w = VG_LITE_ALIGN(w, 16);
+    }
+
+    uint32_t mul, div, align;
+    get_format_bytes(color_format, &mul, &div, &align);
+    return VG_LITE_ALIGN((w * mul / div), align);
+}
+
 static bool decode_indexed_line(
     vg_lite_buffer_format_t color_format,
     const uint32_t* palette,
@@ -1698,36 +1709,30 @@ static bool decode_indexed_line(
     uint8_t px_size;
     uint16_t mask;
 
+    uint32_t w_byte = width_to_stride(w_px, color_format);
+
+    in += w_byte * y; /*First pixel*/
     out += w_px * y;
 
-    int32_t w_byte = 0;
     int8_t shift = 0;
     switch (color_format) {
     case VG_LITE_INDEX_1:
         px_size = 1;
-        w_byte = (w_px + 7) >> 3; /*E.g. w = 20 -> w = 2 + 1*/
-        in += w_byte * y; /*First pixel*/
         in += x / 8; /*8pixel per byte*/
         shift = 7 - (x & 0x7);
         break;
     case VG_LITE_INDEX_2:
         px_size = 2;
-        w_byte = (w_px + 3) >> 2; /*E.g. w = 13 -> w = 3 + 1 (bytes)*/
-        in += w_byte * y; /*First pixel*/
         in += x / 4; /*4pixel per byte*/
         shift = 6 - 2 * (x & 0x3);
         break;
     case VG_LITE_INDEX_4:
         px_size = 4;
-        w_byte = (w_px + 1) >> 1; /*E.g. w = 13 -> w = 6 + 1 (bytes)*/
-        in += w_byte * y; /*First pixel*/
         in += x / 2; /*2pixel per byte*/
         shift = 4 - 4 * (x & 0x1);
         break;
     case VG_LITE_INDEX_8:
         px_size = 8;
-        w_byte = w_px;
-        in += w_byte * y; /*First pixel*/
         in += x;
         shift = 0;
         break;
