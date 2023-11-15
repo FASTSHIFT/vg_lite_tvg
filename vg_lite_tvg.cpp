@@ -1818,6 +1818,16 @@ static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, 
                 decode_indexed_line(source->format, clut_colors, 0, y, width, px_map, image_buffer);
             }
         } break;
+
+        case VG_LITE_BGRX8888: {
+            memcpy(image_buffer, source->memory, px_size * sizeof(uint32_t));
+            vg_color32_t* dest = (vg_color32_t*)image_buffer;
+            while (px_size--) {
+                dest->alpha = 0x00;
+                dest++;
+            }
+        } break;
+
         case VG_LITE_BGR888: {
             const vg_color24_t* src = (vg_color24_t*)source->memory;
             vg_color32_t* dest = (vg_color32_t*)image_buffer;
@@ -1830,6 +1840,7 @@ static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, 
                 dest++;
             }
         } break;
+
         case VG_LITE_BGRA5658: {
             const vg_color16_alpha_t* src = (vg_color16_alpha_t*)source->memory;
             vg_color32_t* dest = (vg_color32_t*)image_buffer;
@@ -1842,6 +1853,7 @@ static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, 
                 dest++;
             }
         } break;
+
         case VG_LITE_BGR565: {
             const vg_color16_t* src = (vg_color16_t*)source->memory;
             vg_color32_t* dest = (vg_color32_t*)image_buffer;
