@@ -22,7 +22,7 @@
 
 #define TVG_THREAD_RENDER 0
 #define FEATURE_BIT_VG_LVGL_SUPPORT 0
-#define FEATURE_BIT_VG_16PIXELS_ALIGN 0
+#define FEATURE_BIT_VG_16PIXELS_ALIGN 1
 #define IMAGE_BUF_ADDR_ALIGN 64
 #define gcFEATURE_VG_TRACE_API 0
 #define VGLITE_LOG TVG_LOG
@@ -54,6 +54,7 @@
     return error
 #define VG_LITE_ALIGN(number, align_bytes) \
     (((number) + ((align_bytes)-1)) & ~((align_bytes)-1))
+#define VG_LITE_IS_ALIGNED(num, align) (((uintptr_t)(num) & ((align)-1)) == 0)
 
 #define TVG_ASSERT(expr) assert(expr)
 #define TVG_CANVAS_ENGINE CanvasEngine::Sw
@@ -148,6 +149,33 @@ private:
 };
 
 typedef vg_lite_float_t FLOATVECTOR4[4];
+
+#pragma pack(1)
+typedef struct {
+    uint8_t blue;
+    uint8_t green;
+    uint8_t red;
+} vg_color24_t;
+
+typedef struct {
+    uint16_t blue : 5;
+    uint16_t green : 6;
+    uint16_t red : 5;
+} vg_color16_t;
+
+typedef struct {
+    vg_color16_t c;
+    uint8_t alpha;
+} vg_color16_alpha_t;
+
+typedef struct {
+    uint8_t blue;
+    uint8_t green;
+    uint8_t red;
+    uint8_t alpha;
+} vg_color32_t;
+
+#pragma pack()
 
 /**********************
  *  STATIC PROTOTYPES
@@ -1759,15 +1787,26 @@ static bool decode_indexed_line(
 static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, const vg_lite_buffer_t* source)
 {
     uint32_t* image_buffer;
+    TVG_ASSERT(VG_LITE_IS_ALIGNED(source->memory, IMAGE_BUF_ADDR_ALIGN));
+
+#if FEATURE_BIT_VG_16PIXELS_ALIGN
+    TVG_ASSERT(VG_LITE_IS_ALIGNED(source->width, 16));
+#endif
+
     if (source->format == VG_LITE_BGRA8888) {
         image_buffer = (uint32_t*)source->memory;
     } else {
         uint32_t width = source->width;
         uint32_t height = source->height;
+        uint32_t px_size = width * height;
 
         image_buffer = ctx->get_image_buffer(width, height);
 
-        if (IS_INDEX_FMT(source->format)) {
+        switch (source->format) {
+        case VG_LITE_INDEX_1:
+        case VG_LITE_INDEX_2:
+        case VG_LITE_INDEX_4:
+        case VG_LITE_INDEX_8: {
             uint32_t palette_size = get_palette_size(source->format);
             uint32_t* clut_colors = ctx->get_CLUT().data();
             TVG_ASSERT(clut_colors != nullptr);
@@ -1778,6 +1817,46 @@ static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, 
             for (uint32_t y = 0; y < height; y++) {
                 decode_indexed_line(source->format, clut_colors, 0, y, width, px_map, image_buffer);
             }
+        } break;
+        case VG_LITE_BGR888: {
+            const vg_color24_t* src = (vg_color24_t*)source->memory;
+            vg_color32_t* dest = (vg_color32_t*)image_buffer;
+            while (px_size--) {
+                dest->red = src->red;
+                dest->green = src->green;
+                dest->blue = src->blue;
+                dest->alpha = 0xFF;
+                src++;
+                dest++;
+            }
+        } break;
+        case VG_LITE_BGRA5658: {
+            const vg_color16_alpha_t* src = (vg_color16_alpha_t*)source->memory;
+            vg_color32_t* dest = (vg_color32_t*)image_buffer;
+            while (px_size--) {
+                dest->red = src->c.red << 3;
+                dest->green = src->c.green << 2;
+                dest->blue = src->c.blue << 3;
+                dest->alpha = 0xFF;
+                src++;
+                dest++;
+            }
+        } break;
+        case VG_LITE_BGR565: {
+            const vg_color16_t* src = (vg_color16_t*)source->memory;
+            vg_color32_t* dest = (vg_color32_t*)image_buffer;
+            while (px_size--) {
+                dest->red = src->red << 3;
+                dest->green = src->green << 2;
+                dest->blue = src->blue << 3;
+                src++;
+                dest++;
+            }
+        } break;
+
+        default:
+            TVG_LOG("unsupport format: %d\n", source->format);
+            break;
         }
     }
 
