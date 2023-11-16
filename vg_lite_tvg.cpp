@@ -38,14 +38,14 @@
     case VLC_OP_##OP:           \
         return (LEN)
 
-#define A(color) (color) >> 24
-#define R(color) ((color)&0x00ff0000) >> 16
-#define G(color) ((color)&0x0000ff00) >> 8
+#define A(color) ((color) >> 24)
+#define R(color) (((color)&0x00ff0000) >> 16)
+#define G(color) (((color)&0x0000ff00) >> 8)
 #define B(color) ((color)&0xff)
 #define ARGB(a, r, g, b) ((a) << 24) | ((r) << 16) | ((g) << 8) | (b)
-#define ARGB4(a, r, g, b) (((a)&0xf0) << 8) | (((r)&0xf0) << 4) | (((g)&0xf0)) | ((b) >> 4)
 #define MIN(a, b) (a) > (b) ? (b) : (a)
 #define MAX(a, b) (a) > (b) ? (a) : (b)
+#define UDIV255(x) (((x)*0x8081U) >> 0x17)
 #define LERP(v1, v2, w) ((v1) * (w) + (v2) * (1.0f - (w)))
 #define CLAMP(x, min, max) (((x) < (min)) ? (min) : ((x) > (max)) ? (max) : (x))
 #define COLOR_FROM_RAMP(ColorRamp) (((vg_lite_float_t*)ColorRamp) + 1)
@@ -188,7 +188,7 @@ static BlendMethod blend_method_conv(vg_lite_blend_t blend);
 static Result shape_append_path(std::unique_ptr<Shape>& shape, vg_lite_path_t* path, vg_lite_matrix_t* matrix);
 static Result shape_append_rect(std::unique_ptr<Shape>& shape, const vg_lite_buffer_t* target, const vg_lite_rectangle_t* rect);
 static Result canvas_set_target(vg_lite_ctx* ctx, vg_lite_buffer_t* target);
-static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, const vg_lite_buffer_t* source);
+static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, const vg_lite_buffer_t* source, vg_lite_color_t color = 0);
 
 static void ClampColor(FLOATVECTOR4 Source, FLOATVECTOR4 Target, uint8_t Premultiplied);
 static uint8_t PackColorComponent(vg_lite_float_t value);
@@ -294,7 +294,7 @@ vg_lite_error_t vg_lite_blit(vg_lite_buffer_t* target,
 
     auto picture = Picture::gen();
 
-    TVG_CHECK_RETURN_VG_ERROR(picture_load(ctx, picture, source));
+    TVG_CHECK_RETURN_VG_ERROR(picture_load(ctx, picture, source, color));
     TVG_CHECK_RETURN_VG_ERROR(picture->transform(matrix_conv(matrix)));
     TVG_CHECK_RETURN_VG_ERROR(picture->blend(blend_method_conv(blend)));
     TVG_CHECK_RETURN_VG_ERROR(ctx->canvas->push(std::move(picture)));
@@ -347,7 +347,7 @@ vg_lite_error_t vg_lite_blit_rect(vg_lite_buffer_t* target,
     TVG_CHECK_RETURN_VG_ERROR(shape_append_rect(shape, target, rect));
 
     auto picture = tvg::Picture::gen();
-    TVG_CHECK_RETURN_VG_ERROR(picture_load(ctx, picture, source));
+    TVG_CHECK_RETURN_VG_ERROR(picture_load(ctx, picture, source, color));
     TVG_CHECK_RETURN_VG_ERROR(picture->transform(matrix_conv(matrix)));
     TVG_CHECK_RETURN_VG_ERROR(picture->blend(blend_method_conv(blend)));
     TVG_CHECK_RETURN_VG_ERROR(picture->composite(std::move(shape), CompositeMethod::ClipPath));
@@ -569,7 +569,7 @@ vg_lite_error_t vg_lite_draw_pattern(vg_lite_buffer_t* target,
     TVG_CHECK_RETURN_VG_ERROR(shape->transform(matrix_conv(path_matrix)));
 
     auto picture = tvg::Picture::gen();
-    TVG_CHECK_RETURN_VG_ERROR(picture_load(ctx, picture, pattern_image));
+    TVG_CHECK_RETURN_VG_ERROR(picture_load(ctx, picture, pattern_image, pattern_color));
     TVG_CHECK_RETURN_VG_ERROR(picture->transform(matrix_conv(pattern_matrix)));
     TVG_CHECK_RETURN_VG_ERROR(picture->blend(blend_method_conv(blend)));
     TVG_CHECK_RETURN_VG_ERROR(picture->composite(std::move(shape), CompositeMethod::ClipPath));
@@ -1785,7 +1785,7 @@ static bool decode_indexed_line(
     return true;
 }
 
-static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, const vg_lite_buffer_t* source)
+static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, const vg_lite_buffer_t* source, vg_lite_color_t color)
 {
     uint32_t* image_buffer;
     TVG_ASSERT(VG_LITE_IS_ALIGNED(source->memory, IMAGE_BUF_ADDR_ALIGN));
@@ -1817,6 +1817,45 @@ static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, 
 
             for (uint32_t y = 0; y < height; y++) {
                 decode_indexed_line(source->format, clut_colors, 0, y, width, px_map, image_buffer);
+            }
+        } break;
+
+        case VG_LITE_A4: {
+            const uint8_t* src = (uint8_t*)source->memory;
+            vg_color32_t* dest = (vg_color32_t*)image_buffer;
+
+            /* 1 byte -> 2 px */
+            px_size /= 2;
+
+            while (px_size--) {
+                /* high 4bit */
+                dest->alpha = (*src & 0xF0);
+                dest->red = UDIV255(B(color) * dest->alpha);
+                dest->green = UDIV255(G(color) * dest->alpha);
+                dest->blue = UDIV255(R(color) * dest->alpha);
+                dest++;
+
+                /* low 4bit */
+                dest->alpha = (*src & 0x0F) << 4;
+                dest->red = UDIV255(B(color) * dest->alpha);
+                dest->green = UDIV255(G(color) * dest->alpha);
+                dest->blue = UDIV255(R(color) * dest->alpha);
+
+                dest++;
+                src++;
+            }
+        } break;
+
+        case VG_LITE_A8: {
+            const uint8_t* src = (uint8_t*)source->memory;
+            vg_color32_t* dest = (vg_color32_t*)image_buffer;
+            while (px_size--) {
+                dest->alpha = *src;
+                dest->red = UDIV255(B(color) * dest->alpha);
+                dest->green = UDIV255(G(color) * dest->alpha);
+                dest->blue = UDIV255(R(color) * dest->alpha);
+                dest++;
+                src++;
             }
         } break;
 
