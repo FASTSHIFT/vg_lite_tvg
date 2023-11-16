@@ -1550,6 +1550,7 @@ static uint8_t vlc_format_len(vg_lite_format_t format)
         return 4;
     default:
         TVG_LOG("UNKNOW_FORMAT: %d\n", format);
+        TVG_ASSERT(false);
         break;
     }
 
@@ -1579,6 +1580,7 @@ static uint8_t vlc_op_arg_len(uint8_t vlc_op)
         VLC_OP_ARG_LEN(LCWARC_REL, 5);
     default:
         TVG_LOG("UNKNOW_VLC_OP: 0x%x", vlc_op);
+        TVG_ASSERT(false);
         break;
     }
 
@@ -1710,6 +1712,7 @@ static uint32_t get_palette_size(vg_lite_buffer_format_t format)
         break;
     default:
         TVG_LOG("unsupport format: %d\n", format);
+        TVG_ASSERT(false);
         break;
     }
     return size;
