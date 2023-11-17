@@ -96,6 +96,10 @@ public:
         : has_commit(false)
         , image_buffer(nullptr)
         , image_buffer_size(0)
+        , clut_2colors { 0 }
+        , clut_4colors { 0 }
+        , clut_16colors { 0 }
+        , clut_256colors { 0 }
         , dither_enable(false)
     {
         canvas = SwCanvas::gen();
@@ -119,15 +123,46 @@ public:
 
     void set_CLUT(uint32_t count, const uint32_t* colors)
     {
-        clut_colors.clear();
-        for (uint32_t i = 0; i < count; ++i) {
-            clut_colors.push_back(colors[i]);
+        switch (count) {
+        case 2:
+            memcpy(clut_2colors, colors, sizeof(clut_2colors));
+            break;
+        case 4:
+            memcpy(clut_4colors, colors, sizeof(clut_4colors));
+            break;
+        case 16:
+            memcpy(clut_16colors, colors, sizeof(clut_16colors));
+            break;
+        case 256:
+            memcpy(clut_256colors, colors, sizeof(clut_256colors));
+            break;
+        default:
+            TVG_ASSERT(false);
+            break;
         }
     }
 
-    std::vector<uint32_t>& get_CLUT()
+    const uint32_t* get_CLUT(vg_lite_buffer_format_t format)
     {
-        return clut_colors;
+        switch (format) {
+        case VG_LITE_INDEX_1:
+            return clut_2colors;
+
+        case VG_LITE_INDEX_2:
+            return clut_2colors;
+
+        case VG_LITE_INDEX_4:
+            return clut_4colors;
+
+        case VG_LITE_INDEX_8:
+            return clut_256colors;
+
+        default:
+            break;
+        }
+
+        TVG_ASSERT(false);
+        return nullptr;
     }
 
     static vg_lite_ctx* get_instance()
@@ -144,7 +179,10 @@ public:
 private:
     uint32_t* image_buffer;
     size_t image_buffer_size;
-    std::vector<uint32_t> clut_colors;
+    uint32_t clut_2colors[2];
+    uint32_t clut_4colors[4];
+    uint32_t clut_16colors[16];
+    uint32_t clut_256colors[256];
     bool dither_enable;
 };
 
@@ -240,7 +278,7 @@ vg_lite_error_t vg_lite_allocate(vg_lite_buffer_t* buffer)
     uint32_t stride = VG_LITE_ALIGN((buffer->width * mul / div), align);
 
     buffer->stride = stride;
-    buffer->memory = malloc(stride * buffer->height);
+    buffer->memory = aligned_alloc(IMAGE_BUF_ADDR_ALIGN, stride * buffer->height);
     TVG_ASSERT(buffer->memory);
     buffer->address = (uint32_t)(uintptr_t)buffer->memory;
     return VG_LITE_SUCCESS;
@@ -544,6 +582,10 @@ vg_lite_error_t vg_lite_upload_path(vg_lite_path_t* path)
 vg_lite_error_t vg_lite_set_CLUT(uint32_t count,
     uint32_t* colors)
 {
+    if (!vg_lite_query_feature(gcFEATURE_BIT_VG_IM_INDEX_FORMAT)) {
+        return VG_LITE_NOT_SUPPORT;
+    }
+
     auto ctx = vg_lite_ctx::get_instance();
     ctx->set_CLUT(count, colors);
     return VG_LITE_SUCCESS;
@@ -1694,30 +1736,6 @@ static Result canvas_set_target(vg_lite_ctx* ctx, vg_lite_buffer_t* target)
     return res;
 }
 
-static uint32_t get_palette_size(vg_lite_buffer_format_t format)
-{
-    uint32_t size = 0;
-    switch (format) {
-    case VG_LITE_INDEX_1:
-        size = 1 << 1;
-        break;
-    case VG_LITE_INDEX_2:
-        size = 1 << 2;
-        break;
-    case VG_LITE_INDEX_4:
-        size = 1 << 4;
-        break;
-    case VG_LITE_INDEX_8:
-        size = 1 << 8;
-        break;
-    default:
-        TVG_LOG("unsupport format: %d\n", format);
-        TVG_ASSERT(false);
-        break;
-    }
-    return size;
-}
-
 static uint32_t width_to_stride(uint32_t w, vg_lite_buffer_format_t color_format)
 {
     if (vg_lite_query_feature(gcFEATURE_BIT_VG_16PIXELS_ALIGN)) {
@@ -1766,6 +1784,7 @@ static bool decode_indexed_line(
         shift = 0;
         break;
     default:
+        TVG_ASSERT(false);
         return false;
     }
 
@@ -1808,15 +1827,9 @@ static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, 
         case VG_LITE_INDEX_2:
         case VG_LITE_INDEX_4:
         case VG_LITE_INDEX_8: {
-            uint32_t palette_size = get_palette_size(source->format);
-            uint32_t* clut_colors = ctx->get_CLUT().data();
-            TVG_ASSERT(clut_colors != nullptr);
-            TVG_ASSERT(palette_size == ctx->get_CLUT().size());
-
-            const uint8_t* px_map = (uint8_t*)source->memory + palette_size * sizeof(uint32_t);
-
+            const uint32_t* clut_colors = ctx->get_CLUT(source->format);
             for (uint32_t y = 0; y < height; y++) {
-                decode_indexed_line(source->format, clut_colors, 0, y, width, px_map, image_buffer);
+                decode_indexed_line(source->format, clut_colors, 0, y, width, (uint8_t*)source->memory, image_buffer);
             }
         } break;
 
