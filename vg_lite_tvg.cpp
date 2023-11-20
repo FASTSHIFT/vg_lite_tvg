@@ -281,6 +281,7 @@ vg_lite_error_t vg_lite_allocate(vg_lite_buffer_t* buffer)
     buffer->memory = aligned_alloc(IMAGE_BUF_ADDR_ALIGN, stride * buffer->height);
     TVG_ASSERT(buffer->memory);
     buffer->address = (uint32_t)(uintptr_t)buffer->memory;
+    buffer->handle = buffer->memory;
     return VG_LITE_SUCCESS;
 }
 
