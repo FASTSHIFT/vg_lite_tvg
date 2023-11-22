@@ -88,13 +88,11 @@ using namespace tvg;
 class vg_lite_ctx {
 public:
     std::unique_ptr<SwCanvas> canvas;
-    bool has_commit;
     void* target_buffer;
 
 public:
     vg_lite_ctx()
-        : has_commit(false)
-        , image_buffer(nullptr)
+        : image_buffer(nullptr)
         , image_buffer_size(0)
         , clut_2colors { 0 }
         , clut_4colors { 0 }
@@ -353,20 +351,10 @@ vg_lite_error_t vg_lite_blit2(vg_lite_buffer_t* target,
         return VG_LITE_NOT_SUPPORT;
     }
 
-    auto ctx = vg_lite_ctx::get_instance();
-    canvas_set_target(ctx, target);
+    vg_lite_error_t error;
 
-    auto picture0 = tvg::Picture::gen();
-    TVG_CHECK_RETURN_VG_ERROR(picture0->load((uint32_t*)source0->memory, source0->width, source0->height, true));
-    TVG_CHECK_RETURN_VG_ERROR(picture0->transform(matrix_conv(matrix0)));
-    TVG_CHECK_RETURN_VG_ERROR(picture0->blend(blend_method_conv(blend)));
-    TVG_CHECK_RETURN_VG_ERROR(ctx->canvas->push(std::move(picture0)));
-
-    auto picture1 = tvg::Picture::gen();
-    TVG_CHECK_RETURN_VG_ERROR(picture1->load((uint32_t*)source1->memory, source1->width, source1->height, true));
-    TVG_CHECK_RETURN_VG_ERROR(picture1->transform(matrix_conv(matrix1)));
-    TVG_CHECK_RETURN_VG_ERROR(picture1->blend(blend_method_conv(blend)));
-    TVG_CHECK_RETURN_VG_ERROR(ctx->canvas->push(std::move(picture1)));
+    VG_LITE_RETURN_ERROR(vg_lite_blit(target, source0, matrix0, blend, 0, filter));
+    VG_LITE_RETURN_ERROR(vg_lite_blit(target, source1, matrix1, blend, 0, filter));
 
     return VG_LITE_SUCCESS;
 }
@@ -420,9 +408,6 @@ vg_lite_error_t vg_lite_close(void)
 vg_lite_error_t vg_lite_finish(void)
 {
     vg_lite_ctx* ctx = vg_lite_ctx::get_instance();
-    if (!ctx->has_commit) {
-        return VG_LITE_SUCCESS;
-    }
 
     if (ctx->canvas->draw() == Result::InsufficientCondition) {
         return VG_LITE_SUCCESS;
@@ -430,16 +415,13 @@ vg_lite_error_t vg_lite_finish(void)
 
     TVG_CHECK_RETURN_VG_ERROR(ctx->canvas->sync());
     TVG_CHECK_RETURN_VG_ERROR(ctx->canvas->clear(true));
-    ctx->has_commit = false;
 
     return VG_LITE_SUCCESS;
 }
 
 vg_lite_error_t vg_lite_flush(void)
 {
-    vg_lite_ctx* ctx = vg_lite_ctx::get_instance();
-    ctx->has_commit = true;
-    return VG_LITE_SUCCESS;
+    return vg_lite_finish();
 }
 
 vg_lite_error_t vg_lite_draw(vg_lite_buffer_t* target,
