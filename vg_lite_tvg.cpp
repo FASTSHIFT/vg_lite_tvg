@@ -384,6 +384,7 @@ vg_lite_error_t vg_lite_blit_rect(vg_lite_buffer_t* target,
 
     auto shape = Shape::gen();
     TVG_CHECK_RETURN_VG_ERROR(shape_append_rect(shape, target, rect));
+    TVG_CHECK_RETURN_VG_ERROR(shape->transform(matrix_conv(matrix)));
 
     auto picture = tvg::Picture::gen();
     TVG_CHECK_RETURN_VG_ERROR(picture_load(ctx, picture, source, color));
