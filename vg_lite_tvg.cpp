@@ -9,6 +9,7 @@
 
 #include "vg_lite.h"
 #include <assert.h>
+#include <float.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -225,6 +226,16 @@ static Result shape_append_path(std::unique_ptr<Shape>& shape, vg_lite_path_t* p
 static Result shape_append_rect(std::unique_ptr<Shape>& shape, const vg_lite_buffer_t* target, const vg_lite_rectangle_t* rect);
 static Result canvas_set_target(vg_lite_ctx* ctx, vg_lite_buffer_t* target);
 static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, const vg_lite_buffer_t* source, vg_lite_color_t color = 0);
+
+static inline bool math_zero(float a)
+{
+    return (fabs(a) < FLT_EPSILON);
+}
+
+static inline bool math_equal(float a, float b)
+{
+    return math_zero(a - b);
+}
 
 static void ClampColor(FLOATVECTOR4 Source, FLOATVECTOR4 Target, uint8_t Premultiplied);
 static uint8_t PackColorComponent(vg_lite_float_t value);
@@ -1683,13 +1694,18 @@ static Result shape_append_path(std::unique_ptr<Shape>& shape, vg_lite_path_t* p
         cur += arg_len * fmt_len;
     }
 
-    float x = path->bounding_box[0];
-    float y = path->bounding_box[1];
-    float w = path->bounding_box[2] - path->bounding_box[0];
-    float h = path->bounding_box[3] - path->bounding_box[1];
+    float x_min = path->bounding_box[0];
+    float y_min = path->bounding_box[1];
+    float x_max = path->bounding_box[2];
+    float y_max = path->bounding_box[3];
+
+    if (math_equal(x_min, __FLT_MIN__) && math_equal(y_min, __FLT_MIN__)
+        && math_equal(x_max, __FLT_MAX__) && math_equal(y_max, __FLT_MAX__)) {
+        return Result::Success;
+    }
 
     auto cilp = Shape::gen();
-    TVG_CHECK_RETURN_RESULT(cilp->appendRect(x, y, w, h, 0, 0));
+    TVG_CHECK_RETURN_RESULT(cilp->appendRect(x_min, y_min, x_max - x_min, y_max - y_min, 0, 0));
     TVG_CHECK_RETURN_RESULT(cilp->transform(matrix_conv(matrix)));
     TVG_CHECK_RETURN_RESULT(shape->composite(std::move(cilp), CompositeMethod::ClipPath));
 
