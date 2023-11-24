@@ -1813,6 +1813,10 @@ static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, 
     TVG_ASSERT(VG_LITE_IS_ALIGNED(source->width, 16));
 #endif
 
+    if(source->image_mode == VG_LITE_MULTIPLY_IMAGE_MODE) {
+        picture->opacity(A(color));
+    }
+
     if (source->format == VG_LITE_BGRA8888) {
         image_buffer = (uint32_t*)source->memory;
     } else {
