@@ -18,8 +18,8 @@ config VG_LITE_TVG_BUF_ADDR_ALIGN
 	int "Buffer address alignment"
 	default 64
 
-config VG_LITE_TVG_BLEND_NORMAL_SUPPORT
-	bool "Enable normal blend mode support"
+config VG_LITE_TVG_LVGL_BLEND_SUPPORT
+	bool "Enable LVGL blend mode support"
 	default n
 
 config VG_LITE_TVG_THREAD_RENDER
