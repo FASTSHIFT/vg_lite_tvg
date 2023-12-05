@@ -17,16 +17,28 @@
 #include <thread>
 #include <vector>
 
+#ifdef __NuttX__
+#include <nuttx/config.h>
+#include <syslog.h>
+#define TVG_LOG(...) syslog(LOG_INFO, __VA_ARGS__)
+#endif
+
 /*********************
  *      DEFINES
  *********************/
 
-#define TVG_THREAD_RENDER 0
-#define FEATURE_BIT_VG_LVGL_SUPPORT 0
-#define FEATURE_BIT_VG_16PIXELS_ALIGN 1
+/* Configuration. */
+// CONIFG_VG_LITE_TVG_BLEND_NORMAL_SUPPORT
+// CONFIG_VG_LITE_TVG_16PIXELS_ALIGN
+// CONFIG_VG_LITE_TVG_THREAD_RENDER
+// CONFIG_VG_LITE_TVG_TRACE_API
+
 #define IMAGE_BUF_ADDR_ALIGN 64
-#define gcFEATURE_VG_TRACE_API 0
 #define VGLITE_LOG TVG_LOG
+
+#ifndef TVG_LOG
+#define TVG_LOG(...) printf(__VA_ARGS__)
+#endif
 
 #define IS_INDEX_FMT(fmt)           \
     ((fmt) == VG_LITE_INDEX_1       \
@@ -60,7 +72,6 @@
 #define TVG_ASSERT(expr) assert(expr)
 #define TVG_CANVAS_ENGINE CanvasEngine::Sw
 #define TVG_COLOR(COLOR) B(COLOR), G(COLOR), R(COLOR), A(COLOR)
-#define TVG_LOG printf
 #define TVG_CHECK_RETURN_VG_ERROR(FUNC)                               \
     do {                                                              \
         Result res = FUNC;                                            \
@@ -257,9 +268,15 @@ static void get_format_bytes(vg_lite_buffer_format_t format,
  **********************/
 
 extern "C" {
+
+void gpu_init(void)
+{
+    vg_lite_init(480, 480);
+}
+
 vg_lite_error_t vg_lite_allocate(vg_lite_buffer_t* buffer)
 {
-#if gcFEATURE_VG_TRACE_API
+#ifdef CONFIG_VG_LITE_TVG_TRACE_API
     VGLITE_LOG("vg_lite_allocate %p\n", buffer);
 #endif
 
@@ -397,7 +414,7 @@ vg_lite_error_t vg_lite_blit_rect(vg_lite_buffer_t* target,
 
 vg_lite_error_t vg_lite_init(int32_t tessellation_width, int32_t tessellation_height)
 {
-#if TVG_THREAD_RENDER
+#ifdef CONFIG_VG_LITE_TVG_THREAD_RENDER
     /* Threads Count */
     auto threads = std::thread::hardware_concurrency();
     if (threads > 0) {
@@ -492,11 +509,11 @@ uint32_t vg_lite_query_feature(vg_lite_feature_t feature)
     case gcFEATURE_BIT_VG_DITHER:
     case gcFEATURE_BIT_VG_USE_DST:
 
-#if FEATURE_BIT_VG_LVGL_SUPPORT
+#ifdef CONIFG_VG_LITE_TVG_BLEND_NORMAL_SUPPORT
     case gcFEATURE_BIT_VG_LVGL_SUPPORT:
 #endif
 
-#if FEATURE_BIT_VG_16PIXELS_ALIGN
+#ifdef CONFIG_VG_LITE_TVG_16PIXELS_ALIGN
     case gcFEATURE_BIT_VG_16PIXELS_ALIGN:
 #endif
         return 1;
@@ -619,7 +636,7 @@ vg_lite_error_t vg_lite_init_grad(vg_lite_linear_gradient_t* grad)
 {
     vg_lite_error_t error = VG_LITE_SUCCESS;
 
-#if gcFEATURE_VG_TRACE_API
+#ifdef CONFIG_VG_LITE_TVG_TRACE_API
     VGLITE_LOG("vg_lite_init_grad %p\n", grad);
 #endif
 
@@ -657,7 +674,7 @@ vg_lite_error_t vg_lite_set_linear_grad(vg_lite_ext_linear_gradient_t* grad,
     vg_lite_color_ramp_t* src_ramp_last;
     vg_lite_color_ramp_t* trg_ramp;
 
-#if gcFEATURE_VG_TRACE_API
+#ifdef CONFIG_VG_LITE_TVG_TRACE_API
     VGLITE_LOG("vg_lite_set_linear_grad %p %d %p (%f %f %f %f) %d %d\n", grad, count, color_ramp,
         linear_gradient.X0, linear_gradient.X1, linear_gradient.Y0, linear_gradient.Y1, spread_mode, pre_multiplied);
 #endif
@@ -775,7 +792,7 @@ vg_lite_error_t vg_lite_update_linear_grad(vg_lite_ext_linear_gradient_t* grad)
     vg_lite_float_t x0, y0, x1, y1, length;
     vg_lite_error_t error = VG_LITE_SUCCESS;
 
-#if gcFEATURE_VG_TRACE_API
+#ifdef CONFIG_VG_LITE_TVG_TRACE_API
     VGLITE_LOG("vg_lite_update_linear_grad %p\n", grad);
 #endif
 
@@ -927,7 +944,7 @@ vg_lite_error_t vg_lite_set_radial_grad(vg_lite_radial_gradient_t* grad,
     vg_lite_color_ramp_t* srcRampLast;
     vg_lite_color_ramp_t* trgRamp;
 
-#if gcFEATURE_VG_TRACE_API
+#ifdef CONFIG_VG_LITE_TVG_TRACE_API
     VGLITE_LOG("vg_lite_set_radial_grad %p %d %p (%f %f %f %f %f) %d %d\n", grad, count, color_ramp,
         radial_grad.cx, radial_grad.cy, radial_grad.fx, radial_grad.fy, radial_grad.r, spread_mode, pre_multiplied);
 #endif
@@ -1045,7 +1062,7 @@ vg_lite_error_t vg_lite_update_radial_grad(vg_lite_radial_gradient_t* grad)
     vg_lite_error_t error = VG_LITE_SUCCESS;
     uint32_t align, mul, div;
 
-#if gcFEATURE_VG_TRACE_API
+#ifdef CONFIG_VG_LITE_TVG_TRACE_API
     VGLITE_LOG("vg_lite_update_radial_grad %p\n", grad);
 #endif
 
@@ -1065,8 +1082,8 @@ vg_lite_error_t vg_lite_update_radial_grad(vg_lite_radial_gradient_t* grad)
 
     for (i = 0; i < ramp_length; ++i) {
         if (colorRamp[i].stop != 0.0f) {
-            vg_lite_float_t mul = common * colorRamp[i].stop;
-            vg_lite_float_t frac = mul - (vg_lite_float_t)floor(mul);
+            vg_lite_float_t m = common * colorRamp[i].stop;
+            vg_lite_float_t frac = m - (vg_lite_float_t)floor(m);
             if (frac > 0.00013f) /* Suppose error for zero is 0.00013 */
             {
                 common = MAX(common, (uint32_t)(1.0f / frac + 0.5f));
@@ -1177,7 +1194,7 @@ vg_lite_error_t vg_lite_set_grad(vg_lite_linear_gradient_t* grad,
 {
     uint32_t i;
 
-#if gcFEATURE_VG_TRACE_API
+#ifdef CONFIG_VG_LITE_TVG_TRACE_API
     VGLITE_LOG("vg_lite_set_grad %p %d %p %p\n", grad, count, colors, stops);
 #endif
 
@@ -1213,7 +1230,7 @@ vg_lite_error_t vg_lite_update_grad(vg_lite_linear_gradient_t* grad)
     int32_t ds, dr, dg, db, da;
     uint32_t* buffer = (uint32_t*)grad->image.memory;
 
-#if gcFEATURE_VG_TRACE_API
+#ifdef CONFIG_VG_LITE_TVG_TRACE_API
     VGLITE_LOG("vg_lite_update_grad %p\n", grad);
 #endif
 
@@ -1281,7 +1298,7 @@ vg_lite_error_t vg_lite_clear_linear_grad(vg_lite_ext_linear_gradient_t* grad)
 {
     vg_lite_error_t error = VG_LITE_SUCCESS;
 
-#if gcFEATURE_VG_TRACE_API
+#ifdef CONFIG_VG_LITE_TVG_TRACE_API
     VGLITE_LOG("vg_lite_clear_linear_grad %p\n", grad);
 #endif
 
@@ -1298,7 +1315,7 @@ vg_lite_error_t vg_lite_clear_grad(vg_lite_linear_gradient_t* grad)
 {
     vg_lite_error_t error = VG_LITE_SUCCESS;
 
-#if gcFEATURE_VG_TRACE_API
+#ifdef CONFIG_VG_LITE_TVG_TRACE_API
     VGLITE_LOG("vg_lite_clear_grad %p\n", grad);
 #endif
 
@@ -1315,7 +1332,7 @@ vg_lite_error_t vg_lite_clear_radial_grad(vg_lite_radial_gradient_t* grad)
 {
     vg_lite_error_t error = VG_LITE_SUCCESS;
 
-#if gcFEATURE_VG_TRACE_API
+#ifdef CONFIG_VG_LITE_TVG_TRACE_API
     VGLITE_LOG("vg_lite_clear_radial_grad %p\n", grad);
 #endif
 
@@ -1330,7 +1347,7 @@ vg_lite_error_t vg_lite_clear_radial_grad(vg_lite_radial_gradient_t* grad)
 
 vg_lite_matrix_t* vg_lite_get_linear_grad_matrix(vg_lite_ext_linear_gradient_t* grad)
 {
-#if gcFEATURE_VG_TRACE_API
+#ifdef CONFIG_VG_LITE_TVG_TRACE_API
     VGLITE_LOG("vg_lite_get_linear_grad_matrix %p\n", grad);
 #endif
 
@@ -1339,7 +1356,7 @@ vg_lite_matrix_t* vg_lite_get_linear_grad_matrix(vg_lite_ext_linear_gradient_t* 
 
 vg_lite_matrix_t* vg_lite_get_grad_matrix(vg_lite_linear_gradient_t* grad)
 {
-#if gcFEATURE_VG_TRACE_API
+#ifdef CONFIG_VG_LITE_TVG_TRACE_API
     VGLITE_LOG("vg_lite_get_grad_matrix %p\n", grad);
 #endif
 
@@ -1348,7 +1365,7 @@ vg_lite_matrix_t* vg_lite_get_grad_matrix(vg_lite_linear_gradient_t* grad)
 
 vg_lite_matrix_t* vg_lite_get_radial_grad_matrix(vg_lite_radial_gradient_t* grad)
 {
-#if gcFEATURE_VG_TRACE_API
+#ifdef CONFIG_VG_LITE_TVG_TRACE_API
     VGLITE_LOG("vg_lite_get_radial_grad_matrix %p\n", grad);
 #endif
 
@@ -1809,11 +1826,11 @@ static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, 
     uint32_t* image_buffer;
     TVG_ASSERT(VG_LITE_IS_ALIGNED(source->memory, IMAGE_BUF_ADDR_ALIGN));
 
-#if FEATURE_BIT_VG_16PIXELS_ALIGN
+#ifdef CONFIG_VG_LITE_TVG_16PIXELS_ALIGN
     TVG_ASSERT(VG_LITE_IS_ALIGNED(source->width, 16));
 #endif
 
-    if(source->image_mode == VG_LITE_MULTIPLY_IMAGE_MODE) {
+    if (source->image_mode == VG_LITE_MULTIPLY_IMAGE_MODE) {
         picture->opacity(A(color));
     }
 
