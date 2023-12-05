@@ -14,6 +14,10 @@ config VG_LITE_TVG_16PIXELS_ALIGN
 	bool "Enable 16 pixels align requirement"
 	default y
 
+config VG_LITE_TVG_BUF_ADDR_ALIGN
+	int "Buffer address alignment"
+	default 64
+
 config VG_LITE_TVG_BLEND_NORMAL_SUPPORT
 	bool "Enable normal blend mode support"
 	default n

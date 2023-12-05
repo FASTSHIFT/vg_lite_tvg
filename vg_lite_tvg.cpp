@@ -33,7 +33,10 @@
 // CONFIG_VG_LITE_TVG_THREAD_RENDER
 // CONFIG_VG_LITE_TVG_TRACE_API
 
-#define IMAGE_BUF_ADDR_ALIGN 64
+#ifndef CONFIG_VG_LITE_TVG_BUF_ADDR_ALIGN
+#define CONFIG_VG_LITE_TVG_BUF_ADDR_ALIGN 64
+#endif
+
 #define VGLITE_LOG TVG_LOG
 
 #ifndef TVG_LOG
@@ -271,7 +274,7 @@ extern "C" {
 
 void gpu_init(void)
 {
-    vg_lite_init(480, 480);
+    vg_lite_init(0, 0);
 }
 
 vg_lite_error_t vg_lite_allocate(vg_lite_buffer_t* buffer)
@@ -304,7 +307,7 @@ vg_lite_error_t vg_lite_allocate(vg_lite_buffer_t* buffer)
     uint32_t stride = VG_LITE_ALIGN((buffer->width * mul / div), align);
 
     buffer->stride = stride;
-    buffer->memory = aligned_alloc(IMAGE_BUF_ADDR_ALIGN, stride * buffer->height);
+    buffer->memory = aligned_alloc(CONFIG_VG_LITE_TVG_BUF_ADDR_ALIGN, stride * buffer->height);
     TVG_ASSERT(buffer->memory);
     buffer->address = (uint32_t)(uintptr_t)buffer->memory;
     buffer->handle = buffer->memory;
@@ -1824,7 +1827,7 @@ static bool decode_indexed_line(
 static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, const vg_lite_buffer_t* source, vg_lite_color_t color)
 {
     uint32_t* image_buffer;
-    TVG_ASSERT(VG_LITE_IS_ALIGNED(source->memory, IMAGE_BUF_ADDR_ALIGN));
+    TVG_ASSERT(VG_LITE_IS_ALIGNED(source->memory, CONFIG_VG_LITE_TVG_BUF_ADDR_ALIGN));
 
 #ifdef CONFIG_VG_LITE_TVG_16PIXELS_ALIGN
     TVG_ASSERT(VG_LITE_IS_ALIGNED(source->width, 16));
