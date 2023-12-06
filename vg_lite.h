@@ -1162,6 +1162,8 @@ typedef unsigned int        vg_lite_color_t;
     /* Rotate a matrix. */
     vg_lite_error_t vg_lite_rotate(vg_lite_float_t degrees, vg_lite_matrix_t *matrix);
 
+    vg_lite_error_t vg_lite_perspective(vg_lite_float_t px, vg_lite_float_t py, vg_lite_matrix_t * matrix);
+
     /* Set a scissor rectangle for render target. */
     vg_lite_error_t vg_lite_set_scissor(vg_lite_int32_t x, vg_lite_int32_t y, vg_lite_int32_t right, vg_lite_int32_t bottom);
 
