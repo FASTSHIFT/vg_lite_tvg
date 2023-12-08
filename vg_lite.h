@@ -1068,6 +1068,7 @@ typedef unsigned int        vg_lite_color_t;
                                     vg_lite_blend_t blend,
                                     vg_lite_pattern_mode_t pattern_mode,
                                     vg_lite_color_t  pattern_color,
+                                    vg_lite_color_t  color,
                                     vg_lite_filter_t filter);
 
     /* Initialize a linear gradient object with default attributes. */

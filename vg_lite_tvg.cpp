@@ -615,6 +615,7 @@ vg_lite_error_t vg_lite_draw_pattern(vg_lite_buffer_t* target,
     vg_lite_blend_t blend,
     vg_lite_pattern_mode_t pattern_mode,
     vg_lite_color_t pattern_color,
+    vg_lite_color_t color,
     vg_lite_filter_t filter)
 {
     auto ctx = vg_lite_ctx::get_instance();
@@ -1383,7 +1384,7 @@ vg_lite_error_t vg_lite_draw_grad(vg_lite_buffer_t* target,
     vg_lite_blend_t blend)
 {
     return vg_lite_draw_pattern(target, path, fill_rule, matrix,
-        &grad->image, &grad->matrix, blend, VG_LITE_PATTERN_PAD, 0, VG_LITE_FILTER_LINEAR);
+        &grad->image, &grad->matrix, blend, VG_LITE_PATTERN_PAD, 0, 0, VG_LITE_FILTER_LINEAR);
 }
 
 vg_lite_error_t vg_lite_draw_radial_grad(vg_lite_buffer_t* target,
