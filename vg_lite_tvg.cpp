@@ -1383,8 +1383,47 @@ vg_lite_error_t vg_lite_draw_grad(vg_lite_buffer_t* target,
     vg_lite_linear_gradient_t* grad,
     vg_lite_blend_t blend)
 {
-    return vg_lite_draw_pattern(target, path, fill_rule, matrix,
-        &grad->image, &grad->matrix, blend, VG_LITE_PATTERN_PAD, 0, 0, VG_LITE_FILTER_LINEAR);
+    auto ctx = vg_lite_ctx::get_instance();
+    TVG_CHECK_RETURN_VG_ERROR(canvas_set_target(ctx, target));
+
+    auto shape = Shape::gen();
+    TVG_CHECK_RETURN_VG_ERROR(shape_append_path(shape, path, matrix));
+    TVG_CHECK_RETURN_VG_ERROR(shape->transform(matrix_conv(matrix)));
+    TVG_CHECK_RETURN_VG_ERROR(shape->fill(fill_rule_conv(fill_rule)););
+    TVG_CHECK_RETURN_VG_ERROR(shape->blend(blend_method_conv(blend)));
+
+    float x_min = path->bounding_box[0];
+    float y_min = path->bounding_box[1];
+    float x_max = path->bounding_box[2];
+    float y_max = path->bounding_box[3];
+
+    auto linearGrad = LinearGradient::gen();
+
+    if (matrix->m[0][1] == 0) {
+        /* horizontal */
+        linearGrad->linear(x_min, y_min, x_min, y_max);
+    } else {
+        /* vertical */
+        linearGrad->linear(x_min, y_min, x_max, y_min);
+    }
+
+    linearGrad->transform(matrix_conv(&grad->matrix));
+    linearGrad->spread(FillSpread::Reflect);
+
+    tvg::Fill::ColorStop colorStops[VLC_MAX_GRADIENT_STOPS];
+    for (int i = 0; i < grad->count; i++) {
+        colorStops[i].offset = grad->stops[i] / 255.0f;
+        colorStops[i].r = R(grad->colors[i]);
+        colorStops[i].g = G(grad->colors[i]);
+        colorStops[i].b = B(grad->colors[i]);
+        colorStops[i].a = A(grad->colors[i]);
+    }
+    TVG_CHECK_RETURN_VG_ERROR(linearGrad->colorStops(colorStops, grad->count));
+
+    TVG_CHECK_RETURN_VG_ERROR(shape->fill(std::move(linearGrad)));
+    TVG_CHECK_RETURN_VG_ERROR(ctx->canvas->push(std::move(shape)));
+
+    return VG_LITE_SUCCESS;
 }
 
 vg_lite_error_t vg_lite_draw_radial_grad(vg_lite_buffer_t* target,
