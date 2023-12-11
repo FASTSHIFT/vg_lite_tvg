@@ -1399,11 +1399,11 @@ vg_lite_error_t vg_lite_draw_grad(vg_lite_buffer_t* target,
 
     auto linearGrad = LinearGradient::gen();
 
-    if (matrix->m[0][1] == 0) {
-        /* horizontal */
+    if (matrix->m[0][1] != 0) {
+        /* vertical */
         linearGrad->linear(x_min, y_min, x_min, y_max);
     } else {
-        /* vertical */
+        /* horizontal */
         linearGrad->linear(x_min, y_min, x_max, y_min);
     }
 
