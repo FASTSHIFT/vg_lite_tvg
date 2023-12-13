@@ -1411,7 +1411,7 @@ vg_lite_error_t vg_lite_draw_grad(vg_lite_buffer_t* target,
     linearGrad->spread(FillSpread::Reflect);
 
     tvg::Fill::ColorStop colorStops[VLC_MAX_GRADIENT_STOPS];
-    for (int i = 0; i < grad->count; i++) {
+    for (vg_lite_uint32_t i = 0; i < grad->count; i++) {
         colorStops[i].offset = grad->stops[i] / 255.0f;
         colorStops[i].r = R(grad->colors[i]);
         colorStops[i].g = G(grad->colors[i]);
