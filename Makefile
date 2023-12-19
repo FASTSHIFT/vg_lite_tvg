@@ -26,6 +26,5 @@ CFLAGS   += ${INCDIR_PREFIX}$(APPDIR)/external/thorvg/thorvg/inc
 CXXFLAGS += ${INCDIR_PREFIX}$(APPDIR)/external/thorvg/thorvg/inc
 
 CSRCS   += $(wildcard *.c)
-CXXSRCS += $(wildcard *.cpp)
 
 include $(APPDIR)/Application.mk
