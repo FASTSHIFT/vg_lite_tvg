@@ -1,5 +1,5 @@
 /**
- * @file vg_lite_tvg.c
+ * @file vg_lite_tvg.cpp
  *
  */
 
@@ -11,10 +11,11 @@
 #include <assert.h>
 #include <float.h>
 #include <math.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <thorvg_capi.h>
+#include <thorvg.h>
+#include <thread>
+#include <vector>
 
 #ifdef __NuttX__
 #include <nuttx/config.h>
@@ -36,10 +37,6 @@
 #define CONFIG_VG_LITE_TVG_BUF_ADDR_ALIGN 64
 #endif
 
-#ifndef CONFIG_VG_LITE_TVG_THREAD_RENDER
-#define CONFIG_VG_LITE_TVG_THREAD_RENDER 0
-#endif
-
 #define VGLITE_LOG TVG_LOG
 
 #ifndef TVG_LOG
@@ -58,16 +55,15 @@
         return (LEN)
 
 #define A(color) ((color) >> 24)
-#define R(color) (((color) & 0x00ff0000) >> 16)
-#define G(color) (((color) & 0x0000ff00) >> 8)
-#define B(color) ((color) & 0xff)
+#define R(color) (((color)&0x00ff0000) >> 16)
+#define G(color) (((color)&0x0000ff00) >> 8)
+#define B(color) ((color)&0xff)
 #define ARGB(a, r, g, b) ((a) << 24) | ((r) << 16) | ((g) << 8) | (b)
 #define MIN(a, b) (a) > (b) ? (b) : (a)
 #define MAX(a, b) (a) > (b) ? (a) : (b)
-#define UDIV255(x) (((x) * 0x8081U) >> 0x17)
+#define UDIV255(x) (((x)*0x8081U) >> 0x17)
 #define LERP(v1, v2, w) ((v1) * (w) + (v2) * (1.0f - (w)))
-#define CLAMP(x, min, max) (((x) < (min)) ? (min) : ((x) > (max)) ? (max) \
-                                                                  : (x))
+#define CLAMP(x, min, max) (((x) < (min)) ? (min) : ((x) > (max)) ? (max) : (x))
 #define COLOR_FROM_RAMP(ColorRamp) (((vg_lite_float_t*)ColorRamp) + 1)
 #define VG_LITE_RETURN_ERROR(func)         \
     if ((error = func) != VG_LITE_SUCCESS) \
@@ -81,8 +77,8 @@
 #define TVG_COLOR(COLOR) B(COLOR), G(COLOR), R(COLOR), A(COLOR)
 #define TVG_CHECK_RETURN_VG_ERROR(FUNC)                               \
     do {                                                              \
-        Tvg_Result res = FUNC;                                        \
-        if (res != TVG_RESULT_SUCCESS) {                              \
+        Result res = FUNC;                                            \
+        if (res != Result::Success) {                                 \
             TVG_LOG("[TVG] [%s:%d] Executed '" #FUNC "' error: %d\n", \
                 __func__, __LINE__, (int)res);                        \
             return vg_lite_error_conv(res);                           \
@@ -90,8 +86,8 @@
     } while (0)
 #define TVG_CHECK_RETURN_RESULT(FUNC)                                 \
     do {                                                              \
-        Tvg_Result res = FUNC;                                        \
-        if (res != TVG_RESULT_SUCCESS) {                              \
+        Result res = FUNC;                                            \
+        if (res != Result::Success) {                                 \
             TVG_LOG("[TVG] [%s:%d] Executed '" #FUNC "' error: %d\n", \
                 __func__, __LINE__, (int)res);                        \
             return res;                                               \
@@ -102,16 +98,106 @@
  *      TYPEDEFS
  **********************/
 
-typedef struct vg_lite_ctx_s {
-    Tvg_Canvas* canvas;
+using namespace tvg;
+
+class vg_lite_ctx {
+public:
+    std::unique_ptr<SwCanvas> canvas;
     void* target_buffer;
+
+public:
+    vg_lite_ctx()
+        : image_buffer(nullptr)
+        , image_buffer_size(0)
+        , clut_2colors { 0 }
+        , clut_4colors { 0 }
+        , clut_16colors { 0 }
+        , clut_256colors { 0 }
+        , dither_enable(false)
+    {
+        canvas = SwCanvas::gen();
+    }
+    ~vg_lite_ctx()
+    {
+        free(image_buffer);
+    }
+
+    uint32_t* get_image_buffer(uint32_t w, uint32_t h)
+    {
+        size_t size = w * h * sizeof(uint32_t);
+        if (size <= image_buffer_size) {
+            return image_buffer;
+        }
+
+        image_buffer = (uint32_t*)realloc(image_buffer, size);
+        image_buffer_size = size;
+        return image_buffer;
+    }
+
+    void set_CLUT(uint32_t count, const uint32_t* colors)
+    {
+        switch (count) {
+        case 2:
+            memcpy(clut_2colors, colors, sizeof(clut_2colors));
+            break;
+        case 4:
+            memcpy(clut_4colors, colors, sizeof(clut_4colors));
+            break;
+        case 16:
+            memcpy(clut_16colors, colors, sizeof(clut_16colors));
+            break;
+        case 256:
+            memcpy(clut_256colors, colors, sizeof(clut_256colors));
+            break;
+        default:
+            TVG_ASSERT(false);
+            break;
+        }
+    }
+
+    const uint32_t* get_CLUT(vg_lite_buffer_format_t format)
+    {
+        switch (format) {
+        case VG_LITE_INDEX_1:
+            return clut_2colors;
+
+        case VG_LITE_INDEX_2:
+            return clut_2colors;
+
+        case VG_LITE_INDEX_4:
+            return clut_4colors;
+
+        case VG_LITE_INDEX_8:
+            return clut_256colors;
+
+        default:
+            break;
+        }
+
+        TVG_ASSERT(false);
+        return nullptr;
+    }
+
+    static vg_lite_ctx* get_instance()
+    {
+        static vg_lite_ctx instance;
+        return &instance;
+    }
+
+    void set_dither(bool enable)
+    {
+        dither_enable = enable;
+    }
+
+private:
     uint32_t* image_buffer;
     size_t image_buffer_size;
     uint32_t clut_2colors[2];
     uint32_t clut_4colors[4];
     uint32_t clut_16colors[16];
     uint32_t clut_256colors[256];
-} vg_lite_ctx_t;
+    bool dither_enable;
+};
 
 typedef vg_lite_float_t FLOATVECTOR4[4];
 
@@ -146,14 +232,14 @@ typedef struct {
  *  STATIC PROTOTYPES
  **********************/
 
-static vg_lite_error_t vg_lite_error_conv(Tvg_Result result);
-static const Tvg_Matrix* matrix_conv(const vg_lite_matrix_t* matrix);
-static Tvg_Fill_Rule fill_rule_conv(vg_lite_fill_t fill);
-static Tvg_Blend_Method blend_method_conv(vg_lite_blend_t blend);
-static Tvg_Result shape_append_path(Tvg_Paint* shape, const vg_lite_path_t* path, const vg_lite_matrix_t* matrix);
-static Tvg_Result shape_append_rect(Tvg_Paint* shape, const vg_lite_buffer_t* target, const vg_lite_rectangle_t* rect);
-static Tvg_Result canvas_set_target(vg_lite_ctx_t* ctx, vg_lite_buffer_t* target);
-static Tvg_Result picture_load(vg_lite_ctx_t* ctx, Tvg_Paint* picture, const vg_lite_buffer_t* source, vg_lite_color_t color);
+static vg_lite_error_t vg_lite_error_conv(Result result);
+static Matrix matrix_conv(const vg_lite_matrix_t* matrix);
+static FillRule fill_rule_conv(vg_lite_fill_t fill);
+static BlendMethod blend_method_conv(vg_lite_blend_t blend);
+static Result shape_append_path(std::unique_ptr<Shape>& shape, vg_lite_path_t* path, vg_lite_matrix_t* matrix);
+static Result shape_append_rect(std::unique_ptr<Shape>& shape, const vg_lite_buffer_t* target, const vg_lite_rectangle_t* rect);
+static Result canvas_set_target(vg_lite_ctx* ctx, vg_lite_buffer_t* target);
+static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, const vg_lite_buffer_t* source, vg_lite_color_t color = 0);
 
 static inline bool math_zero(float a)
 {
@@ -172,7 +258,7 @@ static void get_format_bytes(vg_lite_buffer_format_t format,
     uint32_t* div,
     uint32_t* bytes_align);
 
-/**********************vg_lite_ctx_t*
+/**********************
  *  STATIC VARIABLES
  **********************/
 
@@ -184,72 +270,11 @@ static void get_format_bytes(vg_lite_buffer_format_t format,
  *   GLOBAL FUNCTIONS
  **********************/
 
+extern "C" {
+
 void gpu_init(void)
 {
     vg_lite_init(0, 0);
-}
-
-static vg_lite_ctx_t* vg_lite_ctx_get_instance(void)
-{
-    static vg_lite_ctx_t instance = { 0 };
-    return &instance;
-}
-
-uint32_t* vg_lite_ctx_get_image_buffer(vg_lite_ctx_t* ctx, uint32_t w, uint32_t h)
-{
-    size_t size = w * h * sizeof(uint32_t);
-    if (size <= ctx->image_buffer_size) {
-        return ctx->image_buffer;
-    }
-
-    ctx->image_buffer = (uint32_t*)realloc(ctx->image_buffer, size);
-    TVG_ASSERT(ctx->image_buffer != NULL);
-    ctx->image_buffer_size = size;
-    return ctx->image_buffer;
-}
-
-void vg_lite_ctx_set_CLUT(vg_lite_ctx_t* ctx, uint32_t count, const uint32_t* colors)
-{
-    switch (count) {
-    case 2:
-        memcpy(ctx->clut_2colors, colors, sizeof(ctx->clut_2colors));
-        break;
-    case 4:
-        memcpy(ctx->clut_4colors, colors, sizeof(ctx->clut_4colors));
-        break;
-    case 16:
-        memcpy(ctx->clut_16colors, colors, sizeof(ctx->clut_16colors));
-        break;
-    case 256:
-        memcpy(ctx->clut_256colors, colors, sizeof(ctx->clut_256colors));
-        break;
-    default:
-        TVG_ASSERT(false);
-        break;
-    }
-}
-
-const uint32_t* vg_lite_ctx_get_CLUT(vg_lite_ctx_t* ctx, vg_lite_buffer_format_t format)
-{
-    switch (format) {
-    case VG_LITE_INDEX_1:
-        return ctx->clut_2colors;
-
-    case VG_LITE_INDEX_2:
-        return ctx->clut_2colors;
-
-    case VG_LITE_INDEX_4:
-        return ctx->clut_4colors;
-
-    case VG_LITE_INDEX_8:
-        return ctx->clut_256colors;
-
-    default:
-        break;
-    }
-
-    TVG_ASSERT(false);
-    return NULL;
 }
 
 vg_lite_error_t vg_lite_allocate(vg_lite_buffer_t* buffer)
@@ -283,7 +308,7 @@ vg_lite_error_t vg_lite_allocate(vg_lite_buffer_t* buffer)
 
     buffer->stride = stride;
     buffer->memory = aligned_alloc(CONFIG_VG_LITE_TVG_BUF_ADDR_ALIGN, stride * buffer->height);
-    TVG_ASSERT(buffer->memory != NULL);
+    TVG_ASSERT(buffer->memory);
     buffer->address = (uint32_t)(uintptr_t)buffer->memory;
     buffer->handle = buffer->memory;
     return VG_LITE_SUCCESS;
@@ -314,13 +339,13 @@ vg_lite_error_t vg_lite_unmap(vg_lite_buffer_t* buffer)
 
 vg_lite_error_t vg_lite_clear(vg_lite_buffer_t* target, vg_lite_rectangle_t* rectangle, vg_lite_color_t color)
 {
-    vg_lite_ctx_t* ctx = vg_lite_ctx_get_instance();
+    auto ctx = vg_lite_ctx::get_instance();
     TVG_CHECK_RETURN_VG_ERROR(canvas_set_target(ctx, target));
 
-    Tvg_Paint* shape = tvg_shape_new();
+    auto shape = Shape::gen();
     TVG_CHECK_RETURN_VG_ERROR(shape_append_rect(shape, target, rectangle));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_shape_set_fill_color(shape, TVG_COLOR(color)));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_canvas_push(ctx->canvas, shape));
+    TVG_CHECK_RETURN_VG_ERROR(shape->fill(TVG_COLOR(color)));
+    TVG_CHECK_RETURN_VG_ERROR(ctx->canvas->push(std::move(shape)));
 
     return VG_LITE_SUCCESS;
 }
@@ -332,14 +357,15 @@ vg_lite_error_t vg_lite_blit(vg_lite_buffer_t* target,
     vg_lite_color_t color,
     vg_lite_filter_t filter)
 {
-    vg_lite_ctx_t* ctx = vg_lite_ctx_get_instance();
+    auto ctx = vg_lite_ctx::get_instance();
     canvas_set_target(ctx, target);
 
-    Tvg_Paint* picture = tvg_picture_new();
+    auto picture = Picture::gen();
+
     TVG_CHECK_RETURN_VG_ERROR(picture_load(ctx, picture, source, color));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_paint_set_transform(picture, matrix_conv(matrix)));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_paint_set_blend_method(picture, blend_method_conv(blend)));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_canvas_push(ctx->canvas, picture));
+    TVG_CHECK_RETURN_VG_ERROR(picture->transform(matrix_conv(matrix)));
+    TVG_CHECK_RETURN_VG_ERROR(picture->blend(blend_method_conv(blend)));
+    TVG_CHECK_RETURN_VG_ERROR(ctx->canvas->push(std::move(picture)));
 
     return VG_LITE_SUCCESS;
 }
@@ -372,50 +398,54 @@ vg_lite_error_t vg_lite_blit_rect(vg_lite_buffer_t* target,
     vg_lite_color_t color,
     vg_lite_filter_t filter)
 {
-    vg_lite_ctx_t* ctx = vg_lite_ctx_get_instance();
+    auto ctx = vg_lite_ctx::get_instance();
     TVG_CHECK_RETURN_VG_ERROR(canvas_set_target(ctx, target));
 
-    Tvg_Paint* shape = tvg_shape_new();
-
+    auto shape = Shape::gen();
     TVG_CHECK_RETURN_VG_ERROR(shape_append_rect(shape, target, rect));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_paint_set_transform(shape, matrix_conv(matrix)));
+    TVG_CHECK_RETURN_VG_ERROR(shape->transform(matrix_conv(matrix)));
 
-    Tvg_Paint* picture = tvg_picture_new();
+    auto picture = tvg::Picture::gen();
     TVG_CHECK_RETURN_VG_ERROR(picture_load(ctx, picture, source, color));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_paint_set_transform(picture, matrix_conv(matrix)));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_paint_set_blend_method(picture, blend_method_conv(blend)));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_paint_set_composite_method(picture, shape, TVG_COMPOSITE_METHOD_CLIP_PATH));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_canvas_push(ctx->canvas, picture));
+    TVG_CHECK_RETURN_VG_ERROR(picture->transform(matrix_conv(matrix)));
+    TVG_CHECK_RETURN_VG_ERROR(picture->blend(blend_method_conv(blend)));
+    TVG_CHECK_RETURN_VG_ERROR(picture->composite(std::move(shape), CompositeMethod::ClipPath));
+    TVG_CHECK_RETURN_VG_ERROR(ctx->canvas->push(std::move(picture)));
 
     return VG_LITE_SUCCESS;
 }
 
 vg_lite_error_t vg_lite_init(int32_t tessellation_width, int32_t tessellation_height)
 {
+#ifdef CONFIG_VG_LITE_TVG_THREAD_RENDER
+    /* Threads Count */
+    auto threads = std::thread::hardware_concurrency();
+    if (threads > 0) {
+        --threads; /* Allow the designated main thread capacity */
+    }
+#endif
+
     /* Initialize ThorVG Engine */
-    TVG_CHECK_RETURN_VG_ERROR(tvg_engine_init(TVG_ENGINE_SW, CONFIG_VG_LITE_TVG_THREAD_RENDER));
-    vg_lite_ctx_t* ctx = vg_lite_ctx_get_instance();
-    ctx->canvas = tvg_swcanvas_create();
-    TVG_ASSERT(ctx->canvas != NULL);
+    TVG_CHECK_RETURN_VG_ERROR(Initializer::init(TVG_CANVAS_ENGINE, 0));
     return VG_LITE_SUCCESS;
 }
 
 vg_lite_error_t vg_lite_close(void)
 {
-    TVG_CHECK_RETURN_VG_ERROR(tvg_engine_term(TVG_ENGINE_SW));
+    TVG_CHECK_RETURN_VG_ERROR(Initializer::term(TVG_CANVAS_ENGINE));
     return VG_LITE_SUCCESS;
 }
 
 vg_lite_error_t vg_lite_finish(void)
 {
-    vg_lite_ctx_t* ctx = vg_lite_ctx_get_instance();
+    vg_lite_ctx* ctx = vg_lite_ctx::get_instance();
 
-    if (tvg_canvas_draw(ctx->canvas) == TVG_RESULT_INSUFFICIENT_CONDITION) {
+    if (ctx->canvas->draw() == Result::InsufficientCondition) {
         return VG_LITE_SUCCESS;
     }
 
-    TVG_CHECK_RETURN_VG_ERROR(tvg_canvas_sync(ctx->canvas));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_canvas_clear(ctx->canvas, true));
+    TVG_CHECK_RETURN_VG_ERROR(ctx->canvas->sync());
+    TVG_CHECK_RETURN_VG_ERROR(ctx->canvas->clear(true));
 
     return VG_LITE_SUCCESS;
 }
@@ -432,17 +462,16 @@ vg_lite_error_t vg_lite_draw(vg_lite_buffer_t* target,
     vg_lite_blend_t blend,
     vg_lite_color_t color)
 {
-    vg_lite_ctx_t* ctx = vg_lite_ctx_get_instance();
+    auto ctx = vg_lite_ctx::get_instance();
     TVG_CHECK_RETURN_VG_ERROR(canvas_set_target(ctx, target));
 
-    Tvg_Paint* shape = tvg_shape_new();
-
+    auto shape = Shape::gen();
     TVG_CHECK_RETURN_VG_ERROR(shape_append_path(shape, path, matrix));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_paint_set_transform(shape, matrix_conv(matrix)));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_shape_set_fill_rule(shape, fill_rule_conv(fill_rule)));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_paint_set_blend_method(shape, blend_method_conv(blend)));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_shape_set_fill_color(shape, TVG_COLOR(color)));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_canvas_push(ctx->canvas, shape));
+    TVG_CHECK_RETURN_VG_ERROR(shape->transform(matrix_conv(matrix)));
+    TVG_CHECK_RETURN_VG_ERROR(shape->fill(fill_rule_conv(fill_rule)););
+    TVG_CHECK_RETURN_VG_ERROR(shape->blend(blend_method_conv(blend)));
+    TVG_CHECK_RETURN_VG_ERROR(shape->fill(TVG_COLOR(color)));
+    TVG_CHECK_RETURN_VG_ERROR(ctx->canvas->push(std::move(shape)));
 
     return VG_LITE_SUCCESS;
 }
@@ -572,8 +601,8 @@ vg_lite_error_t vg_lite_set_CLUT(uint32_t count,
         return VG_LITE_NOT_SUPPORT;
     }
 
-    vg_lite_ctx_t* ctx = vg_lite_ctx_get_instance();
-    vg_lite_ctx_set_CLUT(ctx, count, colors);
+    auto ctx = vg_lite_ctx::get_instance();
+    ctx->set_CLUT(count, colors);
     return VG_LITE_SUCCESS;
 }
 
@@ -589,21 +618,20 @@ vg_lite_error_t vg_lite_draw_pattern(vg_lite_buffer_t* target,
     vg_lite_color_t color,
     vg_lite_filter_t filter)
 {
-    vg_lite_ctx_t* ctx = vg_lite_ctx_get_instance();
+    auto ctx = vg_lite_ctx::get_instance();
     TVG_CHECK_RETURN_VG_ERROR(canvas_set_target(ctx, target));
 
-    Tvg_Paint* shape = tvg_shape_new();
-
+    auto shape = Shape::gen();
     TVG_CHECK_RETURN_VG_ERROR(shape_append_path(shape, path, path_matrix));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_shape_set_fill_rule(shape, fill_rule_conv(fill_rule)));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_paint_set_transform(shape, matrix_conv(path_matrix)));
+    TVG_CHECK_RETURN_VG_ERROR(shape->fill(fill_rule_conv(fill_rule)));
+    TVG_CHECK_RETURN_VG_ERROR(shape->transform(matrix_conv(path_matrix)));
 
-    Tvg_Paint* picture = tvg_picture_new();
+    auto picture = tvg::Picture::gen();
     TVG_CHECK_RETURN_VG_ERROR(picture_load(ctx, picture, pattern_image, pattern_color));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_paint_set_transform(picture, matrix_conv(pattern_matrix)));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_paint_set_blend_method(picture, blend_method_conv(blend)));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_paint_set_composite_method(picture, shape, TVG_COMPOSITE_METHOD_CLIP_PATH));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_canvas_push(ctx->canvas, picture));
+    TVG_CHECK_RETURN_VG_ERROR(picture->transform(matrix_conv(pattern_matrix)));
+    TVG_CHECK_RETURN_VG_ERROR(picture->blend(blend_method_conv(blend)));
+    TVG_CHECK_RETURN_VG_ERROR(picture->composite(std::move(shape), CompositeMethod::ClipPath));
+    TVG_CHECK_RETURN_VG_ERROR(ctx->canvas->push(std::move(picture)));
 
     return VG_LITE_SUCCESS;
 }
@@ -1212,9 +1240,9 @@ vg_lite_error_t vg_lite_update_grad(vg_lite_linear_gradient_t* grad)
 
     if (grad->count == 0) {
         /* If no valid stops have been specified (e.g., due to an empty input
-         * array, out-of-range, or out-of-order stops), a stop at 0 with color
-         * 0xFF000000 (opaque black) and a stop at 255 with color 0xFFFFFFFF
-         * (opaque white) are implicitly defined. */
+        * array, out-of-range, or out-of-order stops), a stop at 0 with color
+        * 0xFF000000 (opaque black) and a stop at 255 with color 0xFFFFFFFF
+        * (opaque white) are implicitly defined. */
         grad->stops[0] = 0;
         grad->colors[0] = 0xFF000000; /* Opaque black */
         grad->stops[1] = 255;
@@ -1222,8 +1250,8 @@ vg_lite_error_t vg_lite_update_grad(vg_lite_linear_gradient_t* grad)
         grad->count = 2;
     } else if (grad->count && grad->stops[0] != 0) {
         /* If at least one valid stop has been specified, but none has been
-         * defined with an offset of 0, an implicit stop is added with an
-         * offset of 0 and the same color as the first user-defined stop. */
+        * defined with an offset of 0, an implicit stop is added with an
+        * offset of 0 and the same color as the first user-defined stop. */
         for (i = 0; i < grad->stops[0]; i++)
             buffer[i] = grad->colors[0];
     }
@@ -1262,8 +1290,8 @@ vg_lite_error_t vg_lite_update_grad(vg_lite_linear_gradient_t* grad)
     }
 
     /* If at least one valid stop has been specified, but none has been defined
-     * with an offset of 255, an implicit stop is added with an offset of 255
-     * and the same color as the last user-defined stop. */
+    * with an offset of 255, an implicit stop is added with an offset of 255
+    * and the same color as the last user-defined stop. */
     for (i = grad->stops[grad->count - 1]; i < VLC_GRADIENT_BUFFER_WIDTH; i++)
         buffer[i] = grad->colors[grad->count - 1];
 
@@ -1355,46 +1383,45 @@ vg_lite_error_t vg_lite_draw_grad(vg_lite_buffer_t* target,
     vg_lite_linear_gradient_t* grad,
     vg_lite_blend_t blend)
 {
-    vg_lite_ctx_t* ctx = vg_lite_ctx_get_instance();
+    auto ctx = vg_lite_ctx::get_instance();
     TVG_CHECK_RETURN_VG_ERROR(canvas_set_target(ctx, target));
 
-    Tvg_Paint* shape = tvg_shape_new();
-
+    auto shape = Shape::gen();
     TVG_CHECK_RETURN_VG_ERROR(shape_append_path(shape, path, matrix));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_paint_set_transform(shape, matrix_conv(matrix)));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_shape_set_fill_rule(shape, fill_rule_conv(fill_rule)););
-    TVG_CHECK_RETURN_VG_ERROR(tvg_paint_set_blend_method(shape, blend_method_conv(blend)));
+    TVG_CHECK_RETURN_VG_ERROR(shape->transform(matrix_conv(matrix)));
+    TVG_CHECK_RETURN_VG_ERROR(shape->fill(fill_rule_conv(fill_rule)););
+    TVG_CHECK_RETURN_VG_ERROR(shape->blend(blend_method_conv(blend)));
 
     float x_min = path->bounding_box[0];
     float y_min = path->bounding_box[1];
     float x_max = path->bounding_box[2];
     float y_max = path->bounding_box[3];
 
-    Tvg_Gradient* linear_grad = tvg_linear_gradient_new();
+    auto linearGrad = LinearGradient::gen();
 
     if (matrix->m[0][1] != 0) {
         /* vertical */
-        tvg_linear_gradient_set(linear_grad, x_min, y_min, x_min, y_max);
+        linearGrad->linear(x_min, y_min, x_min, y_max);
     } else {
         /* horizontal */
-        tvg_linear_gradient_set(linear_grad, x_min, y_min, x_max, y_min);
+        linearGrad->linear(x_min, y_min, x_max, y_min);
     }
 
-    tvg_gradient_set_transform(linear_grad, matrix_conv(&grad->matrix));
-    tvg_gradient_set_spread(linear_grad, TVG_STROKE_FILL_REFLECT);
+    linearGrad->transform(matrix_conv(&grad->matrix));
+    linearGrad->spread(FillSpread::Reflect);
 
-    Tvg_Color_Stop color_stops[VLC_MAX_GRADIENT_STOPS];
+    tvg::Fill::ColorStop colorStops[VLC_MAX_GRADIENT_STOPS];
     for (vg_lite_uint32_t i = 0; i < grad->count; i++) {
-        color_stops[i].offset = grad->stops[i] / 255.0f;
-        color_stops[i].r = R(grad->colors[i]);
-        color_stops[i].g = G(grad->colors[i]);
-        color_stops[i].b = B(grad->colors[i]);
-        color_stops[i].a = A(grad->colors[i]);
+        colorStops[i].offset = grad->stops[i] / 255.0f;
+        colorStops[i].r = R(grad->colors[i]);
+        colorStops[i].g = G(grad->colors[i]);
+        colorStops[i].b = B(grad->colors[i]);
+        colorStops[i].a = A(grad->colors[i]);
     }
-    TVG_CHECK_RETURN_VG_ERROR(tvg_gradient_set_color_stops(linear_grad, color_stops, grad->count));
+    TVG_CHECK_RETURN_VG_ERROR(linearGrad->colorStops(colorStops, grad->count));
 
-    TVG_CHECK_RETURN_VG_ERROR(tvg_shape_set_linear_gradient(shape, linear_grad));
-    TVG_CHECK_RETURN_VG_ERROR(tvg_canvas_push(ctx->canvas, shape));
+    TVG_CHECK_RETURN_VG_ERROR(shape->fill(std::move(linearGrad)));
+    TVG_CHECK_RETURN_VG_ERROR(ctx->canvas->push(std::move(shape)));
 
     return VG_LITE_SUCCESS;
 }
@@ -1486,6 +1513,8 @@ vg_lite_error_t vg_lite_enable_dither(void)
         return VG_LITE_SUCCESS;
     }
 
+    vg_lite_ctx::get_instance()->set_dither(true);
+
     return VG_LITE_NOT_SUPPORT;
 }
 
@@ -1494,6 +1523,8 @@ vg_lite_error_t vg_lite_disable_dither(void)
     if (vg_lite_query_feature(gcFEATURE_BIT_VG_DITHER)) {
         return VG_LITE_SUCCESS;
     }
+
+    vg_lite_ctx::get_instance()->set_dither(false);
 
     return VG_LITE_NOT_SUPPORT;
 }
@@ -1507,27 +1538,28 @@ vg_lite_error_t vg_lite_set_command_buffer(uint32_t physical, uint32_t size)
 {
     return VG_LITE_NOT_SUPPORT;
 }
+} /* extern "C" */
 
 /**********************
  *   STATIC FUNCTIONS
  **********************/
 
-static vg_lite_error_t vg_lite_error_conv(Tvg_Result result)
+static vg_lite_error_t vg_lite_error_conv(Result result)
 {
     switch (result) {
-    case TVG_RESULT_SUCCESS:
+    case Result::Success:
         return VG_LITE_SUCCESS;
 
-    case TVG_RESULT_INVALID_ARGUMENT:
+    case Result::InvalidArguments:
         return VG_LITE_INVALID_ARGUMENT;
 
-    case TVG_RESULT_INSUFFICIENT_CONDITION:
+    case Result::InsufficientCondition:
         return VG_LITE_OUT_OF_RESOURCES;
 
-    case TVG_RESULT_FAILED_ALLOCATION:
+    case Result::FailedAllocation:
         return VG_LITE_OUT_OF_MEMORY;
 
-    case TVG_RESULT_NOT_SUPPORTED:
+    case Result::NonSupport:
         return VG_LITE_NOT_SUPPORT;
 
     default:
@@ -1537,46 +1569,46 @@ static vg_lite_error_t vg_lite_error_conv(Tvg_Result result)
     return VG_LITE_TIMEOUT;
 }
 
-static const Tvg_Matrix* matrix_conv(const vg_lite_matrix_t* matrix)
+static Matrix matrix_conv(const vg_lite_matrix_t* matrix)
 {
-    return (Tvg_Matrix*)matrix;
+    return *(Matrix*)matrix;
 }
 
-static Tvg_Fill_Rule fill_rule_conv(vg_lite_fill_t fill)
+static FillRule fill_rule_conv(vg_lite_fill_t fill)
 {
     if (fill == VG_LITE_FILL_EVEN_ODD) {
-        return TVG_FILL_RULE_EVEN_ODD;
+        return FillRule::EvenOdd;
     }
 
-    return TVG_FILL_RULE_WINDING;
+    return FillRule::Winding;
 }
 
-static Tvg_Blend_Method blend_method_conv(vg_lite_blend_t blend)
+static BlendMethod blend_method_conv(vg_lite_blend_t blend)
 {
     switch (blend) {
     case VG_LITE_BLEND_NONE:
-        return TVG_BLEND_METHOD_SRCOVER;
+        return BlendMethod::SrcOver;
 
     case VG_LITE_BLEND_NORMAL_LVGL:
-        return TVG_BLEND_METHOD_NORMAL;
+        return BlendMethod::Normal;
 
     case VG_LITE_BLEND_SRC_OVER:
-        return TVG_BLEND_METHOD_NORMAL;
+        return BlendMethod::Normal;
 
     case VG_LITE_BLEND_SCREEN:
-        return TVG_BLEND_METHOD_SCREEN;
+        return BlendMethod::Screen;
 
     case VG_LITE_BLEND_ADDITIVE:
-        return TVG_BLEND_METHOD_ADD;
+        return BlendMethod::Add;
 
     case VG_LITE_BLEND_MULTIPLY:
-        return TVG_BLEND_METHOD_MULTIPLY;
+        return BlendMethod::Multiply;
 
     default:
         break;
     }
 
-    return TVG_BLEND_METHOD_NORMAL;
+    return BlendMethod::Normal;
 }
 
 static float vlc_get_arg(const void* data, vg_lite_format_t format)
@@ -1652,7 +1684,7 @@ static uint8_t vlc_op_arg_len(uint8_t vlc_op)
     return 0;
 }
 
-static Tvg_Result shape_append_path(Tvg_Paint* shape, const vg_lite_path_t* path, const vg_lite_matrix_t* matrix)
+static Result shape_append_path(std::unique_ptr<Shape>& shape, vg_lite_path_t* path, vg_lite_matrix_t* matrix)
 {
     uint8_t fmt_len = vlc_format_len(path->format);
     uint8_t* cur = (uint8_t*)path->path;
@@ -1668,19 +1700,19 @@ static Tvg_Result shape_append_path(Tvg_Paint* shape, const vg_lite_path_t* path
         /* skip op code */
         cur += fmt_len;
 
-#define VLC_GET_ARG(CUR, INDEX) vlc_get_arg((cur + (INDEX) * fmt_len), path->format);
+#define VLC_GET_ARG(CUR, INDEX) vlc_get_arg((cur + (INDEX)*fmt_len), path->format);
 
         switch (op_code) {
         case VLC_OP_MOVE: {
             float x = VLC_GET_ARG(cur, 0);
             float y = VLC_GET_ARG(cur, 1);
-            TVG_CHECK_RETURN_RESULT(tvg_shape_move_to(shape, x, y));
+            TVG_CHECK_RETURN_RESULT(shape->moveTo(x, y));
         } break;
 
         case VLC_OP_LINE: {
             float x = VLC_GET_ARG(cur, 0);
             float y = VLC_GET_ARG(cur, 1);
-            TVG_CHECK_RETURN_RESULT(tvg_shape_line_to(shape, x, y));
+            TVG_CHECK_RETURN_RESULT(shape->lineTo(x, y));
         } break;
 
         case VLC_OP_QUAD: {
@@ -1697,7 +1729,7 @@ static Tvg_Result shape_append_path(Tvg_Paint* shape, const vg_lite_path_t* path
             qcx1 = x + (qcx1 - x) * 2 / 3;
             qcy1 = y + (qcy1 - y) * 2 / 3;
 
-            TVG_CHECK_RETURN_RESULT(tvg_shape_cubic_to(shape, qcx0, qcy0, qcx1, qcy1, x, y));
+            TVG_CHECK_RETURN_RESULT(shape->cubicTo(qcx0, qcy0, qcx1, qcy1, x, y));
         } break;
 
         case VLC_OP_CUBIC: {
@@ -1707,12 +1739,12 @@ static Tvg_Result shape_append_path(Tvg_Paint* shape, const vg_lite_path_t* path
             float cy2 = VLC_GET_ARG(cur, 3);
             float x = VLC_GET_ARG(cur, 4);
             float y = VLC_GET_ARG(cur, 5);
-            TVG_CHECK_RETURN_RESULT(tvg_shape_cubic_to(shape, cx1, cy1, cx2, cy2, x, y));
+            TVG_CHECK_RETURN_RESULT(shape->cubicTo(cx1, cy1, cx2, cy2, x, y));
         } break;
 
         case VLC_OP_CLOSE:
         case VLC_OP_END: {
-            TVG_CHECK_RETURN_RESULT(tvg_shape_close(shape));
+            TVG_CHECK_RETURN_RESULT(shape->close());
         } break;
 
         default:
@@ -1727,36 +1759,40 @@ static Tvg_Result shape_append_path(Tvg_Paint* shape, const vg_lite_path_t* path
     float x_max = path->bounding_box[2];
     float y_max = path->bounding_box[3];
 
-    Tvg_Paint* clip = tvg_shape_new();
-    TVG_CHECK_RETURN_RESULT(tvg_shape_append_rect(clip, x_min, y_min, x_max - x_min, y_max - y_min, 0, 0));
-    TVG_CHECK_RETURN_RESULT(tvg_paint_set_transform(clip, matrix_conv(matrix)));
-    TVG_CHECK_RETURN_RESULT(tvg_paint_set_composite_method(shape, clip, TVG_COMPOSITE_METHOD_CLIP_PATH));
-
-    return TVG_RESULT_SUCCESS;
-}
-
-static Tvg_Result shape_append_rect(Tvg_Paint* shape, const vg_lite_buffer_t* target, const vg_lite_rectangle_t* rect)
-{
-    if (rect) {
-        TVG_CHECK_RETURN_RESULT(tvg_shape_append_rect(shape, rect->x, rect->y, rect->width, rect->height, 0, 0));
-    } else if (target) {
-        TVG_CHECK_RETURN_RESULT(tvg_shape_append_rect(shape, 0, 0, target->width, target->height, 0, 0));
-    } else {
-        return TVG_RESULT_INVALID_ARGUMENT;
+    if (math_equal(x_min, __FLT_MIN__) && math_equal(y_min, __FLT_MIN__)
+        && math_equal(x_max, __FLT_MAX__) && math_equal(y_max, __FLT_MAX__)) {
+        return Result::Success;
     }
 
-    return TVG_RESULT_SUCCESS;
+    auto cilp = Shape::gen();
+    TVG_CHECK_RETURN_RESULT(cilp->appendRect(x_min, y_min, x_max - x_min, y_max - y_min, 0, 0));
+    TVG_CHECK_RETURN_RESULT(cilp->transform(matrix_conv(matrix)));
+    TVG_CHECK_RETURN_RESULT(shape->composite(std::move(cilp), CompositeMethod::ClipPath));
+
+    return Result::Success;
 }
 
-static Tvg_Result canvas_set_target(vg_lite_ctx_t* ctx, vg_lite_buffer_t* target)
+static Result shape_append_rect(std::unique_ptr<Shape>& shape, const vg_lite_buffer_t* target, const vg_lite_rectangle_t* rect)
 {
-    Tvg_Result res = tvg_swcanvas_set_target(
-        ctx->canvas,
+    if (rect) {
+        TVG_CHECK_RETURN_RESULT(shape->appendRect(rect->x, rect->y, rect->width, rect->height, 0, 0));
+    } else if (target) {
+        TVG_CHECK_RETURN_RESULT(shape->appendRect(0, 0, target->width, target->height, 0, 0));
+    } else {
+        return Result::InvalidArguments;
+    }
+
+    return Result::Success;
+}
+
+static Result canvas_set_target(vg_lite_ctx* ctx, vg_lite_buffer_t* target)
+{
+    Result res = ctx->canvas->target(
         (uint32_t*)target->memory,
         target->width,
         target->width,
         target->height,
-        TVG_COLORSPACE_ARGB8888);
+        SwCanvas::ARGB8888);
     return res;
 }
 
@@ -1828,7 +1864,7 @@ static bool decode_indexed_line(
     return true;
 }
 
-static Tvg_Result picture_load(vg_lite_ctx_t* ctx, Tvg_Paint* picture, const vg_lite_buffer_t* source, vg_lite_color_t color)
+static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, const vg_lite_buffer_t* source, vg_lite_color_t color)
 {
     uint32_t* image_buffer;
     TVG_ASSERT(VG_LITE_IS_ALIGNED(source->memory, CONFIG_VG_LITE_TVG_BUF_ADDR_ALIGN));
@@ -1838,7 +1874,7 @@ static Tvg_Result picture_load(vg_lite_ctx_t* ctx, Tvg_Paint* picture, const vg_
 #endif
 
     if (source->image_mode == VG_LITE_MULTIPLY_IMAGE_MODE) {
-        tvg_paint_set_opacity(picture, A(color));
+        picture->opacity(A(color));
     }
 
     if (source->format == VG_LITE_BGRA8888) {
@@ -1848,14 +1884,14 @@ static Tvg_Result picture_load(vg_lite_ctx_t* ctx, Tvg_Paint* picture, const vg_
         uint32_t height = source->height;
         uint32_t px_size = width * height;
 
-        image_buffer = vg_lite_ctx_get_image_buffer(ctx, width, height);
+        image_buffer = ctx->get_image_buffer(width, height);
 
         switch (source->format) {
         case VG_LITE_INDEX_1:
         case VG_LITE_INDEX_2:
         case VG_LITE_INDEX_4:
         case VG_LITE_INDEX_8: {
-            const uint32_t* clut_colors = vg_lite_ctx_get_CLUT(ctx, source->format);
+            const uint32_t* clut_colors = ctx->get_CLUT(source->format);
             for (uint32_t y = 0; y < height; y++) {
                 decode_indexed_line(source->format, clut_colors, 0, y, width, (uint8_t*)source->memory, image_buffer);
             }
@@ -1954,9 +1990,9 @@ static Tvg_Result picture_load(vg_lite_ctx_t* ctx, Tvg_Paint* picture, const vg_
         }
     }
 
-    TVG_CHECK_RETURN_RESULT(tvg_picture_load_raw(picture, image_buffer, source->width, source->height, true));
+    TVG_CHECK_RETURN_RESULT(picture->load(image_buffer, source->width, source->height, true));
 
-    return TVG_RESULT_SUCCESS;
+    return Result::Success;
 }
 
 static void ClampColor(FLOATVECTOR4 Source, FLOATVECTOR4 Target, uint8_t Premultiplied)

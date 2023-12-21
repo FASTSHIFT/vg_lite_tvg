@@ -23,8 +23,8 @@ config VG_LITE_TVG_LVGL_BLEND_SUPPORT
 	default n
 
 config VG_LITE_TVG_THREAD_RENDER
-	int "Number of rendering threads"
-	default 0
+	bool "Enable multi-thread render"
+	default n
 
 config VG_LITE_TVG_TRACE_API
 	bool "Enable trace API log"
