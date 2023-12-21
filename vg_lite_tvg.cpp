@@ -602,6 +602,7 @@ vg_lite_error_t vg_lite_set_CLUT(uint32_t count,
     if (!vg_lite_query_feature(gcFEATURE_BIT_VG_IM_INDEX_FORMAT)) {
         return VG_LITE_NOT_SUPPORT;
     }
+    TVG_ASSERT(colors);
 
     auto ctx = vg_lite_ctx::get_instance();
     ctx->set_CLUT(count, colors);
