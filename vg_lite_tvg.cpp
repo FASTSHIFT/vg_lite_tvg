@@ -56,16 +56,15 @@
         return (LEN)
 
 #define A(color) ((color) >> 24)
-#define R(color) (((color) & 0x00ff0000) >> 16)
-#define G(color) (((color) & 0x0000ff00) >> 8)
-#define B(color) ((color) & 0xff)
+#define R(color) (((color)&0x00ff0000) >> 16)
+#define G(color) (((color)&0x0000ff00) >> 8)
+#define B(color) ((color)&0xff)
 #define ARGB(a, r, g, b) ((a) << 24) | ((r) << 16) | ((g) << 8) | (b)
 #define MIN(a, b) (a) > (b) ? (b) : (a)
 #define MAX(a, b) (a) > (b) ? (a) : (b)
-#define UDIV255(x) (((x) * 0x8081U) >> 0x17)
+#define UDIV255(x) (((x)*0x8081U) >> 0x17)
 #define LERP(v1, v2, w) ((v1) * (w) + (v2) * (1.0f - (w)))
-#define CLAMP(x, min, max) (((x) < (min)) ? (min) : ((x) > (max)) ? (max) \
-                                                                  : (x))
+#define CLAMP(x, min, max) (((x) < (min)) ? (min) : ((x) > (max)) ? (max) : (x))
 #define COLOR_FROM_RAMP(ColorRamp) (((vg_lite_float_t*)ColorRamp) + 1)
 #define VG_LITE_RETURN_ERROR(func)         \
     if ((error = func) != VG_LITE_SUCCESS) \
@@ -1703,7 +1702,7 @@ static Result shape_append_path(std::unique_ptr<Shape>& shape, vg_lite_path_t* p
         /* skip op code */
         cur += fmt_len;
 
-#define VLC_GET_ARG(CUR, INDEX) vlc_get_arg((cur + (INDEX) * fmt_len), path->format);
+#define VLC_GET_ARG(CUR, INDEX) vlc_get_arg((cur + (INDEX)*fmt_len), path->format);
 
         switch (op_code) {
         case VLC_OP_MOVE: {
