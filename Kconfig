@@ -22,6 +22,11 @@ config VG_LITE_TVG_LVGL_BLEND_SUPPORT
 	bool "Enable LVGL blend mode support"
 	default n
 
+config VG_LITE_TVG_YUV_SUPPORT
+	bool "Enable YUV support"
+	depends on LIBYUV
+	default y
+
 config VG_LITE_TVG_THREAD_RENDER
 	bool "Enable multi-thread render"
 	default n

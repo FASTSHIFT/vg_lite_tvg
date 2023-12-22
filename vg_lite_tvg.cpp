@@ -10,13 +10,16 @@
 #include "vg_lite.h"
 #include <assert.h>
 #include <float.h>
-#include <libyuv/convert_argb.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
 #include <thorvg.h>
 #include <thread>
 #include <vector>
+
+#ifdef CONFIG_VG_LITE_TVG_YUV_SUPPORT
+#include <libyuv/convert_argb.h>
+#endif
 
 #ifdef __NuttX__
 #include <nuttx/config.h>
@@ -28,8 +31,9 @@
  *      DEFINES
  *********************/
 
-/* Configuration. */
+/* Configuration reference. */
 // #define CONFIG_VG_LITE_TVG_LVGL_BLEND_SUPPORT
+// #define CONFIG_VG_LITE_TVG_YUV_SUPPORT
 // #define CONFIG_VG_LITE_TVG_16PIXELS_ALIGN
 // #define CONFIG_VG_LITE_TVG_THREAD_RENDER
 // #define CONFIG_VG_LITE_TVG_TRACE_API
@@ -515,6 +519,10 @@ uint32_t vg_lite_query_feature(vg_lite_feature_t feature)
 
 #ifdef CONFIG_VG_LITE_TVG_LVGL_BLEND_SUPPORT
     case gcFEATURE_BIT_VG_LVGL_SUPPORT:
+#endif
+
+#ifdef CONFIG_VG_LITE_TVG_YUV_SUPPORT
+    case gcFEATURE_BIT_VG_YUV_INPUT:
 #endif
 
 #ifdef CONFIG_VG_LITE_TVG_16PIXELS_ALIGN
@@ -1985,10 +1993,12 @@ static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, 
             }
         } break;
 
+#ifdef CONFIG_VG_LITE_TVG_YUV_SUPPORT
         case VG_LITE_NV12: {
             libyuv::NV12ToARGB((const uint8_t*)source->memory, source->stride, (const uint8_t*)source->yuv.uv_memory, source->yuv.uv_stride,
                 (uint8_t*)image_buffer, source->width * sizeof(uint32_t), width, height);
         } break;
+#endif
 
         default:
             TVG_LOG("unsupport format: %d\n", source->format);
