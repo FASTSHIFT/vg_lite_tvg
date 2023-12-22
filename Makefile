@@ -23,7 +23,9 @@ include $(APPDIR)/Make.defs
 CXXEXT   := .cpp
 
 CFLAGS   += ${INCDIR_PREFIX}$(APPDIR)/external/thorvg/thorvg/inc
+CFLAGS   += ${INCDIR_PREFIX}$(APPDIR)/apps/graphics/libyuv/libyuv/include
 CXXFLAGS += ${INCDIR_PREFIX}$(APPDIR)/external/thorvg/thorvg/inc
+CXXFLAGS += ${INCDIR_PREFIX}$(APPDIR)/apps/graphics/libyuv/libyuv/include
 
 CSRCS   += $(wildcard *.c)
 CXXSRCS += $(wildcard *.cpp)
