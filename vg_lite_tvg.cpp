@@ -10,6 +10,7 @@
 #include "vg_lite.h"
 #include <assert.h>
 #include <float.h>
+#include <libyuv/convert_argb.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -55,15 +56,16 @@
         return (LEN)
 
 #define A(color) ((color) >> 24)
-#define R(color) (((color)&0x00ff0000) >> 16)
-#define G(color) (((color)&0x0000ff00) >> 8)
-#define B(color) ((color)&0xff)
+#define R(color) (((color) & 0x00ff0000) >> 16)
+#define G(color) (((color) & 0x0000ff00) >> 8)
+#define B(color) ((color) & 0xff)
 #define ARGB(a, r, g, b) ((a) << 24) | ((r) << 16) | ((g) << 8) | (b)
 #define MIN(a, b) (a) > (b) ? (b) : (a)
 #define MAX(a, b) (a) > (b) ? (a) : (b)
-#define UDIV255(x) (((x)*0x8081U) >> 0x17)
+#define UDIV255(x) (((x) * 0x8081U) >> 0x17)
 #define LERP(v1, v2, w) ((v1) * (w) + (v2) * (1.0f - (w)))
-#define CLAMP(x, min, max) (((x) < (min)) ? (min) : ((x) > (max)) ? (max) : (x))
+#define CLAMP(x, min, max) (((x) < (min)) ? (min) : ((x) > (max)) ? (max) \
+                                                                  : (x))
 #define COLOR_FROM_RAMP(ColorRamp) (((vg_lite_float_t*)ColorRamp) + 1)
 #define VG_LITE_RETURN_ERROR(func)         \
     if ((error = func) != VG_LITE_SUCCESS) \
@@ -1240,9 +1242,9 @@ vg_lite_error_t vg_lite_update_grad(vg_lite_linear_gradient_t* grad)
 
     if (grad->count == 0) {
         /* If no valid stops have been specified (e.g., due to an empty input
-        * array, out-of-range, or out-of-order stops), a stop at 0 with color
-        * 0xFF000000 (opaque black) and a stop at 255 with color 0xFFFFFFFF
-        * (opaque white) are implicitly defined. */
+         * array, out-of-range, or out-of-order stops), a stop at 0 with color
+         * 0xFF000000 (opaque black) and a stop at 255 with color 0xFFFFFFFF
+         * (opaque white) are implicitly defined. */
         grad->stops[0] = 0;
         grad->colors[0] = 0xFF000000; /* Opaque black */
         grad->stops[1] = 255;
@@ -1250,8 +1252,8 @@ vg_lite_error_t vg_lite_update_grad(vg_lite_linear_gradient_t* grad)
         grad->count = 2;
     } else if (grad->count && grad->stops[0] != 0) {
         /* If at least one valid stop has been specified, but none has been
-        * defined with an offset of 0, an implicit stop is added with an
-        * offset of 0 and the same color as the first user-defined stop. */
+         * defined with an offset of 0, an implicit stop is added with an
+         * offset of 0 and the same color as the first user-defined stop. */
         for (i = 0; i < grad->stops[0]; i++)
             buffer[i] = grad->colors[0];
     }
@@ -1290,8 +1292,8 @@ vg_lite_error_t vg_lite_update_grad(vg_lite_linear_gradient_t* grad)
     }
 
     /* If at least one valid stop has been specified, but none has been defined
-    * with an offset of 255, an implicit stop is added with an offset of 255
-    * and the same color as the last user-defined stop. */
+     * with an offset of 255, an implicit stop is added with an offset of 255
+     * and the same color as the last user-defined stop. */
     for (i = grad->stops[grad->count - 1]; i < VLC_GRADIENT_BUFFER_WIDTH; i++)
         buffer[i] = grad->colors[grad->count - 1];
 
@@ -1700,7 +1702,7 @@ static Result shape_append_path(std::unique_ptr<Shape>& shape, vg_lite_path_t* p
         /* skip op code */
         cur += fmt_len;
 
-#define VLC_GET_ARG(CUR, INDEX) vlc_get_arg((cur + (INDEX)*fmt_len), path->format);
+#define VLC_GET_ARG(CUR, INDEX) vlc_get_arg((cur + (INDEX) * fmt_len), path->format);
 
         switch (op_code) {
         case VLC_OP_MOVE: {
@@ -1981,6 +1983,11 @@ static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, 
                 src++;
                 dest++;
             }
+        } break;
+
+        case VG_LITE_NV12: {
+            libyuv::NV12ToARGB((const uint8_t*)source->memory, source->stride, (const uint8_t*)source->yuv.uv_memory, source->yuv.uv_stride,
+                (uint8_t*)image_buffer, source->width * sizeof(uint32_t), width, height);
         } break;
 
         default:
