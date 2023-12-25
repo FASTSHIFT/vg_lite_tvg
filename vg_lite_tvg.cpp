@@ -60,15 +60,16 @@
         return (LEN)
 
 #define A(color) ((color) >> 24)
-#define R(color) (((color)&0x00ff0000) >> 16)
-#define G(color) (((color)&0x0000ff00) >> 8)
-#define B(color) ((color)&0xff)
+#define R(color) (((color) & 0x00ff0000) >> 16)
+#define G(color) (((color) & 0x0000ff00) >> 8)
+#define B(color) ((color) & 0xff)
 #define ARGB(a, r, g, b) ((a) << 24) | ((r) << 16) | ((g) << 8) | (b)
 #define MIN(a, b) (a) > (b) ? (b) : (a)
 #define MAX(a, b) (a) > (b) ? (a) : (b)
-#define UDIV255(x) (((x)*0x8081U) >> 0x17)
+#define UDIV255(x) (((x) * 0x8081U) >> 0x17)
 #define LERP(v1, v2, w) ((v1) * (w) + (v2) * (1.0f - (w)))
-#define CLAMP(x, min, max) (((x) < (min)) ? (min) : ((x) > (max)) ? (max) : (x))
+#define CLAMP(x, min, max) (((x) < (min)) ? (min) : ((x) > (max)) ? (max) \
+                                                                  : (x))
 #define COLOR_FROM_RAMP(ColorRamp) (((vg_lite_float_t*)ColorRamp) + 1)
 #define VG_LITE_RETURN_ERROR(func)         \
     if ((error = func) != VG_LITE_SUCCESS) \
@@ -1710,7 +1711,7 @@ static Result shape_append_path(std::unique_ptr<Shape>& shape, vg_lite_path_t* p
         /* skip op code */
         cur += fmt_len;
 
-#define VLC_GET_ARG(CUR, INDEX) vlc_get_arg((cur + (INDEX)*fmt_len), path->format);
+#define VLC_GET_ARG(CUR, INDEX) vlc_get_arg((cur + (INDEX) * fmt_len), path->format);
 
         switch (op_code) {
         case VLC_OP_MOVE: {
@@ -1883,11 +1884,7 @@ static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, 
     TVG_ASSERT(VG_LITE_IS_ALIGNED(source->width, 16));
 #endif
 
-    if (source->image_mode == VG_LITE_MULTIPLY_IMAGE_MODE) {
-        picture->opacity(A(color));
-    }
-
-    if (source->format == VG_LITE_BGRA8888) {
+    if (source->format == VG_LITE_BGRA8888 && source->image_mode == VG_LITE_NORMAL_IMAGE_MODE) {
         image_buffer = (uint32_t*)source->memory;
     } else {
         uint32_t width = source->width;
@@ -2000,10 +1997,27 @@ static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, 
         } break;
 #endif
 
+        case VG_LITE_BGRA8888: {
+            memcpy(image_buffer, source->memory, px_size * sizeof(vg_color32_t));
+        } break;
+
         default:
             TVG_LOG("unsupport format: %d\n", source->format);
             TVG_ASSERT(false);
             break;
+        }
+
+        /* multiply color */
+        if (source->image_mode == VG_LITE_MULTIPLY_IMAGE_MODE) {
+            px_size = width * height;
+            vg_color32_t* dest = (vg_color32_t*)image_buffer;
+            while (px_size--) {
+                dest->alpha = UDIV255(dest->alpha * A(color));
+                dest->red = UDIV255(dest->red * B(color));
+                dest->green = UDIV255(dest->green * G(color));
+                dest->blue = UDIV255(dest->blue * R(color));
+                dest++;
+            }
         }
     }
 
