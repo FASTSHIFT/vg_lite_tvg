@@ -1931,10 +1931,6 @@ static void picture_bgra88888_to_bgr565(vg_color16_t* dest, const vg_color32_t* 
     }
 }
 
-static void picture_bgr565_to_bgra88888(vg_color32_t* dest, const vg_color16_t* src, uint32_t px_size)
-{
-}
-
 static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, const vg_lite_buffer_t* source, vg_lite_color_t color)
 {
     uint32_t* image_buffer;
