@@ -48,39 +48,11 @@
 #define TVG_LOG(...) printf(__VA_ARGS__)
 #endif
 
-#define IS_INDEX_FMT(fmt)           \
-    ((fmt) == VG_LITE_INDEX_1       \
-        || (fmt) == VG_LITE_INDEX_2 \
-        || (fmt) == VG_LITE_INDEX_4 \
-        || (fmt) == VG_LITE_INDEX_8)
-
-#define VLC_GET_OP_CODE(ptr) (*((uint8_t*)ptr))
-#define VLC_OP_ARG_LEN(OP, LEN) \
-    case VLC_OP_##OP:           \
-        return (LEN)
-
-#define A(color) ((color) >> 24)
-#define R(color) (((color) & 0x00ff0000) >> 16)
-#define G(color) (((color) & 0x0000ff00) >> 8)
-#define B(color) ((color) & 0xff)
-#define ARGB(a, r, g, b) ((a) << 24) | ((r) << 16) | ((g) << 8) | (b)
-#define MIN(a, b) (a) > (b) ? (b) : (a)
-#define MAX(a, b) (a) > (b) ? (a) : (b)
-#define UDIV255(x) (((x) * 0x8081U) >> 0x17)
-#define LERP(v1, v2, w) ((v1) * (w) + (v2) * (1.0f - (w)))
-#define CLAMP(x, min, max) (((x) < (min)) ? (min) : ((x) > (max)) ? (max) \
-                                                                  : (x))
-#define COLOR_FROM_RAMP(ColorRamp) (((vg_lite_float_t*)ColorRamp) + 1)
-#define VG_LITE_RETURN_ERROR(func)         \
-    if ((error = func) != VG_LITE_SUCCESS) \
-    return error
-#define VG_LITE_ALIGN(number, align_bytes) \
-    (((number) + ((align_bytes)-1)) & ~((align_bytes)-1))
-#define VG_LITE_IS_ALIGNED(num, align) (((uintptr_t)(num) & ((align)-1)) == 0)
-
 #define TVG_ASSERT(expr) assert(expr)
 #define TVG_CANVAS_ENGINE CanvasEngine::Sw
 #define TVG_COLOR(COLOR) B(COLOR), G(COLOR), R(COLOR), A(COLOR)
+#define TVG_IS_VG_FMT_SUPPORT(fmt) ((fmt) == VG_LITE_BGRA8888 || (fmt) == VG_LITE_BGRX8888)
+
 #define TVG_CHECK_RETURN_VG_ERROR(FUNC)                               \
     do {                                                              \
         Result res = FUNC;                                            \
@@ -100,44 +72,119 @@
         }                                                             \
     } while (0)
 
+/* clang-format off */
+
+#define IS_INDEX_FMT(fmt)           \
+    ((fmt) == VG_LITE_INDEX_1       \
+        || (fmt) == VG_LITE_INDEX_2 \
+        || (fmt) == VG_LITE_INDEX_4 \
+        || (fmt) == VG_LITE_INDEX_8)
+
+#define VLC_GET_ARG(CUR, INDEX) vlc_get_arg((cur + (INDEX) * fmt_len), path->format);
+#define VLC_GET_OP_CODE(ptr) (*((uint8_t*)ptr))
+#define VLC_OP_ARG_LEN(OP, LEN) \
+    case VLC_OP_##OP:           \
+        return (LEN)
+
+#define A(color) ((color) >> 24)
+#define R(color) (((color) & 0x00ff0000) >> 16)
+#define G(color) (((color) & 0x0000ff00) >> 8)
+#define B(color) ((color) & 0xff)
+#define ARGB(a, r, g, b) ((a) << 24) | ((r) << 16) | ((g) << 8) | (b)
+#define MIN(a, b) (a) > (b) ? (b) : (a)
+#define MAX(a, b) (a) > (b) ? (a) : (b)
+#define UDIV255(x) (((x) * 0x8081U) >> 0x17)
+#define LERP(v1, v2, w) ((v1) * (w) + (v2) * (1.0f - (w)))
+#define CLAMP(x, min, max) (((x) < (min)) ? (min) : ((x) > (max)) ? (max) : (x))
+#define COLOR_FROM_RAMP(ColorRamp) (((vg_lite_float_t*)ColorRamp) + 1)
+
+#define VG_LITE_RETURN_ERROR(func)         \
+    if ((error = func) != VG_LITE_SUCCESS) \
+    return error
+
+#define VG_LITE_ALIGN(number, align_bytes) \
+    (((number) + ((align_bytes)-1)) & ~((align_bytes)-1))
+
+#define VG_LITE_IS_ALIGNED(num, align) (((uintptr_t)(num) & ((align)-1)) == 0)
+
+/* clang-format on */
+
 /**********************
  *      TYPEDEFS
  **********************/
 
 using namespace tvg;
 
+#pragma pack(1)
+typedef struct {
+    uint8_t blue;
+    uint8_t green;
+    uint8_t red;
+} vg_color24_t;
+
+typedef struct {
+    uint16_t blue : 5;
+    uint16_t green : 6;
+    uint16_t red : 5;
+} vg_color16_t;
+
+typedef struct {
+    vg_color16_t c;
+    uint8_t alpha;
+} vg_color16_alpha_t;
+
+typedef struct {
+    uint8_t blue;
+    uint8_t green;
+    uint8_t red;
+    uint8_t alpha;
+} vg_color32_t;
+
+#pragma pack()
+
 class vg_lite_ctx {
 public:
     std::unique_ptr<SwCanvas> canvas;
     void* target_buffer;
+    uint32_t target_px_size;
+    vg_lite_buffer_format_t target_format;
 
 public:
     vg_lite_ctx()
-        : image_buffer(nullptr)
-        , image_buffer_size(0)
+        : target_buffer { nullptr }
+        , target_px_size { 0 }
+        , target_format { VG_LITE_BGRA8888 }
         , clut_2colors { 0 }
         , clut_4colors { 0 }
         , clut_16colors { 0 }
         , clut_256colors { 0 }
-        , dither_enable(false)
     {
         canvas = SwCanvas::gen();
-    }
-    ~vg_lite_ctx()
-    {
-        free(image_buffer);
     }
 
     uint32_t* get_image_buffer(uint32_t w, uint32_t h)
     {
-        size_t size = w * h * sizeof(uint32_t);
-        if (size <= image_buffer_size) {
-            return image_buffer;
-        }
+        src_buffer.resize(w * h);
+        return src_buffer.data();
+    }
 
-        image_buffer = (uint32_t*)realloc(image_buffer, size);
-        image_buffer_size = size;
-        return image_buffer;
+    uint32_t* get_temp_target_buffer(uint32_t w, uint32_t h)
+    {
+        uint32_t px_size = w * h;
+        if (px_size > dest_buffer.size()) {
+
+            /* During resize, the first address of the vector may change
+             * to ensure that there is no unfinished drawing.
+             */
+            TVG_ASSERT(target_buffer == nullptr);
+            dest_buffer.resize(w * h);
+        }
+        return dest_buffer.data();
+    }
+
+    uint32_t* get_temp_target_buffer()
+    {
+        return dest_buffer.data();
     }
 
     void set_CLUT(uint32_t count, const uint32_t* colors)
@@ -190,49 +237,18 @@ public:
         return &instance;
     }
 
-    void set_dither(bool enable)
-    {
-        dither_enable = enable;
-    }
-
 private:
-    uint32_t* image_buffer;
-    size_t image_buffer_size;
+    /*  */
+    std::vector<uint32_t> src_buffer;
+    std::vector<uint32_t> dest_buffer;
+
     uint32_t clut_2colors[2];
     uint32_t clut_4colors[4];
     uint32_t clut_16colors[16];
     uint32_t clut_256colors[256];
-    bool dither_enable;
 };
 
 typedef vg_lite_float_t FLOATVECTOR4[4];
-
-#pragma pack(1)
-typedef struct {
-    uint8_t blue;
-    uint8_t green;
-    uint8_t red;
-} vg_color24_t;
-
-typedef struct {
-    uint16_t blue : 5;
-    uint16_t green : 6;
-    uint16_t red : 5;
-} vg_color16_t;
-
-typedef struct {
-    vg_color16_t c;
-    uint8_t alpha;
-} vg_color16_alpha_t;
-
-typedef struct {
-    uint8_t blue;
-    uint8_t green;
-    uint8_t red;
-    uint8_t alpha;
-} vg_color32_t;
-
-#pragma pack()
 
 /**********************
  *  STATIC PROTOTYPES
@@ -246,6 +262,7 @@ static Result shape_append_path(std::unique_ptr<Shape>& shape, vg_lite_path_t* p
 static Result shape_append_rect(std::unique_ptr<Shape>& shape, const vg_lite_buffer_t* target, const vg_lite_rectangle_t* rect);
 static Result canvas_set_target(vg_lite_ctx* ctx, vg_lite_buffer_t* target);
 static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, const vg_lite_buffer_t* source, vg_lite_color_t color = 0);
+static void picture_bgra88888_to_bgr565(vg_color16_t* dest, const vg_color32_t* src, uint32_t px_size);
 
 static inline bool math_zero(float a)
 {
@@ -452,6 +469,26 @@ vg_lite_error_t vg_lite_finish(void)
 
     TVG_CHECK_RETURN_VG_ERROR(ctx->canvas->sync());
     TVG_CHECK_RETURN_VG_ERROR(ctx->canvas->clear(true));
+
+    /* If target_buffer is not in a format supported by thorvg, software conversion is required. */
+    if (ctx->target_buffer) {
+        switch (ctx->target_format) {
+        case VG_LITE_BGR565:
+            picture_bgra88888_to_bgr565(
+                (vg_color16_t*)ctx->target_buffer,
+                (const vg_color32_t*)ctx->get_temp_target_buffer(),
+                ctx->target_px_size);
+            break;
+        default:
+            TVG_LOG("unsupport format: %d\n", ctx->target_format);
+            TVG_ASSERT(false);
+            break;
+        }
+
+        /* finish convert, clean target buffer info */
+        ctx->target_buffer = nullptr;
+        ctx->target_px_size = 0;
+    }
 
     return VG_LITE_SUCCESS;
 }
@@ -1520,23 +1557,11 @@ vg_lite_error_t vg_lite_set_flexa_stop_frame(void)
 
 vg_lite_error_t vg_lite_enable_dither(void)
 {
-    if (vg_lite_query_feature(gcFEATURE_BIT_VG_DITHER)) {
-        return VG_LITE_SUCCESS;
-    }
-
-    vg_lite_ctx::get_instance()->set_dither(true);
-
     return VG_LITE_NOT_SUPPORT;
 }
 
 vg_lite_error_t vg_lite_disable_dither(void)
 {
-    if (vg_lite_query_feature(gcFEATURE_BIT_VG_DITHER)) {
-        return VG_LITE_SUCCESS;
-    }
-
-    vg_lite_ctx::get_instance()->set_dither(false);
-
     return VG_LITE_NOT_SUPPORT;
 }
 
@@ -1711,8 +1736,6 @@ static Result shape_append_path(std::unique_ptr<Shape>& shape, vg_lite_path_t* p
         /* skip op code */
         cur += fmt_len;
 
-#define VLC_GET_ARG(CUR, INDEX) vlc_get_arg((cur + (INDEX) * fmt_len), path->format);
-
         switch (op_code) {
         case VLC_OP_MOVE: {
             float x = VLC_GET_ARG(cur, 0);
@@ -1798,12 +1821,34 @@ static Result shape_append_rect(std::unique_ptr<Shape>& shape, const vg_lite_buf
 
 static Result canvas_set_target(vg_lite_ctx* ctx, vg_lite_buffer_t* target)
 {
+    uint32_t* target_buffer = nullptr;
+
+    /* if target_buffer needs to be changed, finish current drawing */
+    if (ctx->target_buffer && ctx->target_buffer != target->memory) {
+        vg_lite_finish();
+    }
+
+    ctx->target_format = target->format;
+
+    if (TVG_IS_VG_FMT_SUPPORT(target->format)) {
+        /* if target format is supported by VG, use target buffer directly */
+        target_buffer = (uint32_t*)target->memory;
+        ctx->target_buffer = nullptr;
+        ctx->target_px_size = 0;
+    } else {
+        /* if target format is not supported by VG, use internal buffer */
+        target_buffer = ctx->get_temp_target_buffer(target->width, target->height);
+        ctx->target_buffer = target->memory;
+        ctx->target_px_size = target->width * target->height;
+    }
+
     Result res = ctx->canvas->target(
-        (uint32_t*)target->memory,
+        target_buffer,
         target->width,
         target->width,
         target->height,
         SwCanvas::ARGB8888);
+
     return res;
 }
 
@@ -1873,6 +1918,21 @@ static bool decode_indexed_line(
         }
     }
     return true;
+}
+
+static void picture_bgra88888_to_bgr565(vg_color16_t* dest, const vg_color32_t* src, uint32_t px_size)
+{
+    while (px_size--) {
+        dest->red = src->red >> 3;
+        dest->green = src->green >> 2;
+        dest->blue = src->blue >> 3;
+        src++;
+        dest++;
+    }
+}
+
+static void picture_bgr565_to_bgra88888(vg_color32_t* dest, const vg_color16_t* src, uint32_t px_size)
+{
 }
 
 static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, const vg_lite_buffer_t* source, vg_lite_color_t color)
@@ -1972,7 +2032,7 @@ static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, 
                 dest->red = src->c.red << 3;
                 dest->green = src->c.green << 2;
                 dest->blue = src->c.blue << 3;
-                dest->alpha = 0xFF;
+                dest->alpha = src->alpha;
                 src++;
                 dest++;
             }
@@ -1985,6 +2045,7 @@ static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, 
                 dest->red = src->red << 3;
                 dest->green = src->green << 2;
                 dest->blue = src->blue << 3;
+                dest->alpha = 0xFF;
                 src++;
                 dest++;
             }
