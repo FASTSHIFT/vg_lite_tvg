@@ -263,6 +263,7 @@ static Result shape_append_rect(std::unique_ptr<Shape>& shape, const vg_lite_buf
 static Result canvas_set_target(vg_lite_ctx* ctx, vg_lite_buffer_t* target);
 static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, const vg_lite_buffer_t* source, vg_lite_color_t color = 0);
 static void picture_bgra88888_to_bgr565(vg_color16_t* dest, const vg_color32_t* src, uint32_t px_size);
+static void picture_bgra88888_to_bgra5658(vg_color16_alpha_t* dest, const vg_color32_t* src, uint32_t px_size);
 
 static inline bool math_zero(float a)
 {
@@ -476,6 +477,12 @@ vg_lite_error_t vg_lite_finish(void)
         case VG_LITE_BGR565:
             picture_bgra88888_to_bgr565(
                 (vg_color16_t*)ctx->target_buffer,
+                (const vg_color32_t*)ctx->get_temp_target_buffer(),
+                ctx->target_px_size);
+            break;
+        case VG_LITE_BGRA5658:
+            picture_bgra88888_to_bgra5658(
+                (vg_color16_alpha_t*)ctx->target_buffer,
                 (const vg_color32_t*)ctx->get_temp_target_buffer(),
                 ctx->target_px_size);
             break;
@@ -1926,6 +1933,18 @@ static void picture_bgra88888_to_bgr565(vg_color16_t* dest, const vg_color32_t* 
         dest->red = src->red >> 3;
         dest->green = src->green >> 2;
         dest->blue = src->blue >> 3;
+        src++;
+        dest++;
+    }
+}
+
+static void picture_bgra88888_to_bgra5658(vg_color16_alpha_t* dest, const vg_color32_t* src, uint32_t px_size)
+{
+    while (px_size--) {
+        dest->c.red = src->red >> 3;
+        dest->c.green = src->green >> 2;
+        dest->c.blue = src->blue >> 3;
+        dest->alpha = src->alpha;
         src++;
         dest++;
     }
