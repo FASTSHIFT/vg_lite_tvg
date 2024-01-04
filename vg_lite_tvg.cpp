@@ -1963,6 +1963,7 @@ static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, 
         image_buffer = (uint32_t*)source->memory;
     } else {
         uint32_t width = source->width;
+        uint32_t stride = width_to_stride(width, source->format);
         uint32_t height = source->height;
         uint32_t px_size = width * height;
 
@@ -2008,13 +2009,17 @@ static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, 
         case VG_LITE_A8: {
             const uint8_t* src = (uint8_t*)source->memory;
             vg_color32_t* dest = (vg_color32_t*)image_buffer;
-            while (px_size--) {
-                dest->alpha = *src;
-                dest->red = UDIV255(B(color) * dest->alpha);
-                dest->green = UDIV255(G(color) * dest->alpha);
-                dest->blue = UDIV255(R(color) * dest->alpha);
-                dest++;
-                src++;
+            for (uint32_t y = 0; y < height; y++) {
+                const uint8_t* cur_src = src;
+                for (uint32_t x = 0; x < width; x++) {
+                    dest->alpha = *cur_src;
+                    dest->red = UDIV255(B(color) * dest->alpha);
+                    dest->green = UDIV255(G(color) * dest->alpha);
+                    dest->blue = UDIV255(R(color) * dest->alpha);
+                    dest++;
+                    cur_src++;
+                }
+                src += stride;
             }
         } break;
 
