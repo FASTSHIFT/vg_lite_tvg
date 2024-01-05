@@ -107,6 +107,9 @@
 
 #define VG_LITE_IS_ALIGNED(num, align) (((uintptr_t)(num) & ((align)-1)) == 0)
 
+#define VG_LITE_IS_ALPHA_FORMAT(format) \
+    ((format) == VG_LITE_A8 || (format) == VG_LITE_A4)
+
 /* clang-format on */
 
 /**********************
@@ -248,6 +251,35 @@ private:
     uint32_t clut_256colors[256];
 };
 
+template <typename DEST_TYPE, typename SRC_TYPE>
+class vg_lite_converter {
+public:
+    typedef void (*converter_cb_t)(DEST_TYPE* dest, const SRC_TYPE* src, uint32_t px_size, uint32_t color);
+
+public:
+    vg_lite_converter(converter_cb_t converter)
+        : _converter_cb(converter)
+    {
+    }
+
+    void convert(vg_lite_buffer_t* dest_buf, const vg_lite_buffer_t* src_buf, uint32_t color = 0)
+    {
+        TVG_ASSERT(_converter_cb);
+        uint8_t* dest = (uint8_t*)dest_buf->memory;
+        const uint8_t* src = (const uint8_t*)src_buf->memory;
+        uint32_t h = src_buf->height;
+
+        while (h--) {
+            _converter_cb((DEST_TYPE*)dest, (const SRC_TYPE*)src, src_buf->width, color);
+            dest += dest_buf->stride;
+            src += src_buf->stride;
+        }
+    }
+
+private:
+    converter_cb_t _converter_cb;
+};
+
 typedef vg_lite_float_t FLOATVECTOR4[4];
 
 /**********************
@@ -262,8 +294,6 @@ static Result shape_append_path(std::unique_ptr<Shape>& shape, vg_lite_path_t* p
 static Result shape_append_rect(std::unique_ptr<Shape>& shape, const vg_lite_buffer_t* target, const vg_lite_rectangle_t* rect);
 static Result canvas_set_target(vg_lite_ctx* ctx, vg_lite_buffer_t* target);
 static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, const vg_lite_buffer_t* source, vg_lite_color_t color = 0);
-static void picture_bgra88888_to_bgr565(vg_color16_t* dest, const vg_color32_t* src, uint32_t px_size);
-static void picture_bgra88888_to_bgra5658(vg_color16_alpha_t* dest, const vg_color32_t* src, uint32_t px_size);
 
 static inline bool math_zero(float a)
 {
@@ -285,6 +315,116 @@ static void get_format_bytes(vg_lite_buffer_format_t format,
 /**********************
  *  STATIC VARIABLES
  **********************/
+
+/* color converters */
+
+static vg_lite_converter<vg_color16_t, vg_color32_t> conv_bgra8888_to_bgr565(
+    [](vg_color16_t* dest, const vg_color32_t* src, uint32_t px_size, uint32_t /* color */) {
+        while (px_size--) {
+            dest->red = src->red >> 3;
+            dest->green = src->green >> 2;
+            dest->blue = src->blue >> 3;
+            src++;
+            dest++;
+        }
+    });
+
+static vg_lite_converter<vg_color16_alpha_t, vg_color32_t> conv_bgra8888_to_bgra5658(
+    [](vg_color16_alpha_t* dest, const vg_color32_t* src, uint32_t px_size, uint32_t /* color */) {
+        while (px_size--) {
+            dest->c.red = src->red >> 3;
+            dest->c.green = src->green >> 2;
+            dest->c.blue = src->blue >> 3;
+            dest->alpha = src->alpha;
+            src++;
+            dest++;
+        }
+    });
+
+static vg_lite_converter<vg_color32_t, vg_color16_t> conv_bgr565_to_bgra8888(
+    [](vg_color32_t* dest, const vg_color16_t* src, uint32_t px_size, uint32_t /* color */) {
+        while (px_size--) {
+            dest->red = src->red << 3;
+            dest->green = src->green << 2;
+            dest->blue = src->blue << 3;
+            dest->alpha = 0xFF;
+            src++;
+            dest++;
+        }
+    });
+
+static vg_lite_converter<vg_color32_t, vg_color16_alpha_t> conv_bgra5658_to_bgra8888(
+    [](vg_color32_t* dest, const vg_color16_alpha_t* src, uint32_t px_size, uint32_t /* color */) {
+        while (px_size--) {
+            dest->red = src->c.red << 3;
+            dest->green = src->c.green << 2;
+            dest->blue = src->c.blue << 3;
+            dest->alpha = src->alpha;
+            src++;
+            dest++;
+        }
+    });
+
+static vg_lite_converter<vg_color32_t, vg_color32_t> conv_bgrx8888_to_bgra8888(
+    [](vg_color32_t* dest, const vg_color32_t* src, uint32_t px_size, uint32_t /* color */) {
+        while (px_size--) {
+            *dest = *src;
+            dest->alpha = 0xFF;
+            dest++;
+            src++;
+        }
+    });
+
+static vg_lite_converter<vg_color32_t, vg_color24_t> conv_bgr888_to_bgra8888(
+    [](vg_color32_t* dest, const vg_color24_t* src, uint32_t px_size, uint32_t /* color */) {
+        while (px_size--) {
+            dest->red = src->red;
+            dest->green = src->green;
+            dest->blue = src->blue;
+            dest->alpha = 0xFF;
+            src++;
+            dest++;
+        }
+    });
+
+static vg_lite_converter<vg_color32_t, uint8_t> conv_alpha8_to_bgra8888(
+    [](vg_color32_t* dest, const uint8_t* src, uint32_t px_size, uint32_t color) {
+        while (px_size--) {
+            uint8_t alpha = *src;
+            dest->alpha = alpha;
+            dest->red = UDIV255(B(color) * alpha);
+            dest->green = UDIV255(G(color) * alpha);
+            dest->blue = UDIV255(R(color) * alpha);
+            dest++;
+            src++;
+        }
+    });
+
+static vg_lite_converter<vg_color32_t, uint8_t> conv_alpha4_to_bgra8888(
+    [](vg_color32_t* dest, const uint8_t* src, uint32_t px_size, uint32_t color) {
+        /* 1 byte -> 2 px */
+        px_size /= 2;
+
+        while (px_size--) {
+            /* high 4bit */
+            uint8_t alpha = (*src & 0xF0);
+            dest->alpha = alpha;
+            dest->red = UDIV255(B(color) * alpha);
+            dest->green = UDIV255(G(color) * alpha);
+            dest->blue = UDIV255(R(color) * alpha);
+            dest++;
+
+            /* low 4bit */
+            alpha = (*src & 0x0F) << 4;
+            dest->alpha = alpha;
+            dest->red = UDIV255(B(color) * alpha);
+            dest->green = UDIV255(G(color) * alpha);
+            dest->blue = UDIV255(R(color) * alpha);
+
+            dest++;
+            src++;
+        }
+    });
 
 /**********************
  *      MACROS
@@ -460,6 +600,29 @@ vg_lite_error_t vg_lite_close(void)
     return VG_LITE_SUCCESS;
 }
 
+static void picture_bgra8888_to_bgr565(vg_color16_t* dest, const vg_color32_t* src, uint32_t px_size)
+{
+    while (px_size--) {
+        dest->red = src->red >> 3;
+        dest->green = src->green >> 2;
+        dest->blue = src->blue >> 3;
+        src++;
+        dest++;
+    }
+}
+
+static void picture_bgra8888_to_bgra5658(vg_color16_alpha_t* dest, const vg_color32_t* src, uint32_t px_size)
+{
+    while (px_size--) {
+        dest->c.red = src->red >> 3;
+        dest->c.green = src->green >> 2;
+        dest->c.blue = src->blue >> 3;
+        dest->alpha = src->alpha;
+        src++;
+        dest++;
+    }
+}
+
 vg_lite_error_t vg_lite_finish(void)
 {
     vg_lite_ctx* ctx = vg_lite_ctx::get_instance();
@@ -475,13 +638,13 @@ vg_lite_error_t vg_lite_finish(void)
     if (ctx->target_buffer) {
         switch (ctx->target_format) {
         case VG_LITE_BGR565:
-            picture_bgra88888_to_bgr565(
+            picture_bgra8888_to_bgr565(
                 (vg_color16_t*)ctx->target_buffer,
                 (const vg_color32_t*)ctx->get_temp_target_buffer(),
                 ctx->target_px_size);
             break;
         case VG_LITE_BGRA5658:
-            picture_bgra88888_to_bgra5658(
+            picture_bgra8888_to_bgra5658(
                 (vg_color16_alpha_t*)ctx->target_buffer,
                 (const vg_color32_t*)ctx->get_temp_target_buffer(),
                 ctx->target_px_size);
@@ -1927,29 +2090,6 @@ static bool decode_indexed_line(
     return true;
 }
 
-static void picture_bgra88888_to_bgr565(vg_color16_t* dest, const vg_color32_t* src, uint32_t px_size)
-{
-    while (px_size--) {
-        dest->red = src->red >> 3;
-        dest->green = src->green >> 2;
-        dest->blue = src->blue >> 3;
-        src++;
-        dest++;
-    }
-}
-
-static void picture_bgra88888_to_bgra5658(vg_color16_alpha_t* dest, const vg_color32_t* src, uint32_t px_size)
-{
-    while (px_size--) {
-        dest->c.red = src->red >> 3;
-        dest->c.green = src->green >> 2;
-        dest->c.blue = src->blue >> 3;
-        dest->alpha = src->alpha;
-        src++;
-        dest++;
-    }
-}
-
 static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, const vg_lite_buffer_t* source, vg_lite_color_t color)
 {
     uint32_t* image_buffer;
@@ -1963,11 +2103,17 @@ static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, 
         image_buffer = (uint32_t*)source->memory;
     } else {
         uint32_t width = source->width;
-        uint32_t stride = width_to_stride(width, source->format);
         uint32_t height = source->height;
         uint32_t px_size = width * height;
-
         image_buffer = ctx->get_image_buffer(width, height);
+
+        vg_lite_buffer_t target;
+        memset(&target, 0, sizeof(target));
+        target.memory = image_buffer;
+        target.format = VG_LITE_BGRA8888;
+        target.width = width;
+        target.height = height;
+        target.stride = width_to_stride(width, target.format);
 
         switch (source->format) {
         case VG_LITE_INDEX_1:
@@ -1981,94 +2127,27 @@ static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, 
         } break;
 
         case VG_LITE_A4: {
-            const uint8_t* src = (uint8_t*)source->memory;
-            vg_color32_t* dest = (vg_color32_t*)image_buffer;
-
-            /* 1 byte -> 2 px */
-            px_size /= 2;
-
-            while (px_size--) {
-                /* high 4bit */
-                dest->alpha = (*src & 0xF0);
-                dest->red = UDIV255(B(color) * dest->alpha);
-                dest->green = UDIV255(G(color) * dest->alpha);
-                dest->blue = UDIV255(R(color) * dest->alpha);
-                dest++;
-
-                /* low 4bit */
-                dest->alpha = (*src & 0x0F) << 4;
-                dest->red = UDIV255(B(color) * dest->alpha);
-                dest->green = UDIV255(G(color) * dest->alpha);
-                dest->blue = UDIV255(R(color) * dest->alpha);
-
-                dest++;
-                src++;
-            }
+            conv_alpha4_to_bgra8888.convert(&target, source, color);
         } break;
 
         case VG_LITE_A8: {
-            const uint8_t* src = (uint8_t*)source->memory;
-            vg_color32_t* dest = (vg_color32_t*)image_buffer;
-            for (uint32_t y = 0; y < height; y++) {
-                const uint8_t* cur_src = src;
-                for (uint32_t x = 0; x < width; x++) {
-                    dest->alpha = *cur_src;
-                    dest->red = UDIV255(B(color) * dest->alpha);
-                    dest->green = UDIV255(G(color) * dest->alpha);
-                    dest->blue = UDIV255(R(color) * dest->alpha);
-                    dest++;
-                    cur_src++;
-                }
-                src += stride;
-            }
+            conv_alpha8_to_bgra8888.convert(&target, source, color);
         } break;
 
         case VG_LITE_BGRX8888: {
-            memcpy(image_buffer, source->memory, px_size * sizeof(uint32_t));
-            vg_color32_t* dest = (vg_color32_t*)image_buffer;
-            while (px_size--) {
-                dest->alpha = 0x00;
-                dest++;
-            }
+            conv_bgrx8888_to_bgra8888.convert(&target, source);
         } break;
 
         case VG_LITE_BGR888: {
-            const vg_color24_t* src = (vg_color24_t*)source->memory;
-            vg_color32_t* dest = (vg_color32_t*)image_buffer;
-            while (px_size--) {
-                dest->red = src->red;
-                dest->green = src->green;
-                dest->blue = src->blue;
-                dest->alpha = 0xFF;
-                src++;
-                dest++;
-            }
+            conv_bgr888_to_bgra8888.convert(&target, source);
         } break;
 
         case VG_LITE_BGRA5658: {
-            const vg_color16_alpha_t* src = (vg_color16_alpha_t*)source->memory;
-            vg_color32_t* dest = (vg_color32_t*)image_buffer;
-            while (px_size--) {
-                dest->red = src->c.red << 3;
-                dest->green = src->c.green << 2;
-                dest->blue = src->c.blue << 3;
-                dest->alpha = src->alpha;
-                src++;
-                dest++;
-            }
+            conv_bgra5658_to_bgra8888.convert(&target, source);
         } break;
 
         case VG_LITE_BGR565: {
-            const vg_color16_t* src = (vg_color16_t*)source->memory;
-            vg_color32_t* dest = (vg_color32_t*)image_buffer;
-            while (px_size--) {
-                dest->red = src->red << 3;
-                dest->green = src->green << 2;
-                dest->blue = src->blue << 3;
-                dest->alpha = 0xFF;
-                src++;
-                dest++;
-            }
+            conv_bgr565_to_bgra8888.convert(&target, source);
         } break;
 
 #ifdef CONFIG_VG_LITE_TVG_YUV_SUPPORT
@@ -2089,8 +2168,7 @@ static Result picture_load(vg_lite_ctx* ctx, std::unique_ptr<Picture>& picture, 
         }
 
         /* multiply color */
-        if (source->image_mode == VG_LITE_MULTIPLY_IMAGE_MODE) {
-            px_size = width * height;
+        if (source->image_mode == VG_LITE_MULTIPLY_IMAGE_MODE && !VG_LITE_IS_ALPHA_FORMAT(source->format)) {
             vg_color32_t* dest = (vg_color32_t*)image_buffer;
             while (px_size--) {
                 dest->alpha = UDIV255(dest->alpha * A(color));
