@@ -845,7 +845,7 @@ vg_lite_error_t vg_lite_draw_pattern(vg_lite_buffer_t* target,
     TVG_CHECK_RETURN_VG_ERROR(shape->transform(matrix_conv(path_matrix)));
 
     auto picture = tvg::Picture::gen();
-    TVG_CHECK_RETURN_VG_ERROR(picture_load(ctx, picture, pattern_image, pattern_color));
+    TVG_CHECK_RETURN_VG_ERROR(picture_load(ctx, picture, pattern_image, color));
     TVG_CHECK_RETURN_VG_ERROR(picture->transform(matrix_conv(pattern_matrix)));
     TVG_CHECK_RETURN_VG_ERROR(picture->blend(blend_method_conv(blend)));
     TVG_CHECK_RETURN_VG_ERROR(picture->composite(std::move(shape), CompositeMethod::ClipPath));
