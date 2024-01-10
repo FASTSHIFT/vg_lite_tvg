@@ -32,6 +32,8 @@
 extern "C" {
 #endif
 
+#if LV_USE_VG_LITE_TVG
+
 #if defined(_MSC_VER)
 #define inline __inline
 #endif
@@ -421,7 +423,7 @@ typedef unsigned int        vg_lite_color_t;
         VG_LITE_BLEND_NORMAL_LVGL               = 0x200C,   /*! S * Sa + (1 - Sa) * D  */
         VG_LITE_BLEND_ADDITIVE_LVGL             = 0x200D,   /*! (S + D) * Sa + D * (1 - Sa) */
         VG_LITE_BLEND_MULTIPLY_LVGL             = 0x200E,   /*! (S * D) * Sa + D * (1 - Sa) */
-        VG_LITE_BLEND_PREMULTIPLY_SRC_OVER      = 0x200F,   /*! S * Sa + (1 - Sa) * D , Not the standard blend mode defined 
+        VG_LITE_BLEND_PREMULTIPLY_SRC_OVER      = 0x200F,   /*! S * Sa + (1 - Sa) * D , Not the standard blend mode defined
                                                                 by openvg, only support on the new version GC265. */
     } vg_lite_blend_t;
 
@@ -532,7 +534,7 @@ typedef unsigned int        vg_lite_color_t;
     typedef enum vg_lite_index_endian
     {
         VG_LITE_INDEX_LITTLE_ENDIAN,            /*! Parse the index pixel from low to high,
-                                                 *! when using index1, the parsing order is bit0~bit7. 
+                                                 *! when using index1, the parsing order is bit0~bit7.
                                                  *! when using index2, the parsing order is bit0:1,bit2:3,bit4:5.bit6:7.
                                                  *! when using index4, the parsing order is bit0:3,bit4:7.
                                                  */
@@ -1312,6 +1314,8 @@ typedef unsigned int        vg_lite_color_t;
     vg_lite_error_t vg_lite_flexa_stop_frame(void);
 
 #endif /* VGLITE_VERSION_3_0 */
+
+#endif
 
 #ifdef __cplusplus
 }
