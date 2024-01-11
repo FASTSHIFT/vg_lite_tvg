@@ -31,8 +31,4 @@ config VG_LITE_TVG_THREAD_RENDER
 	bool "Enable multi-thread render"
 	default n
 
-config VG_LITE_TVG_TRACE_API
-	bool "Enable trace API log"
-	default n
-
 endif # GRAPHICS_VG_LITE_TVG

@@ -36,7 +36,6 @@
 // #define CONFIG_VG_LITE_TVG_YUV_SUPPORT
 // #define CONFIG_VG_LITE_TVG_16PIXELS_ALIGN
 // #define CONFIG_VG_LITE_TVG_THREAD_RENDER
-// #define CONFIG_VG_LITE_TVG_TRACE_API
 
 #ifndef CONFIG_VG_LITE_TVG_BUF_ADDR_ALIGN
 #define CONFIG_VG_LITE_TVG_BUF_ADDR_ALIGN 64
@@ -443,10 +442,6 @@ void gpu_init(void)
 
 vg_lite_error_t vg_lite_allocate(vg_lite_buffer_t* buffer)
 {
-#ifdef CONFIG_VG_LITE_TVG_TRACE_API
-    VGLITE_LOG("vg_lite_allocate %p\n", buffer);
-#endif
-
     if (buffer->format == VG_LITE_RGBA8888_ETC2_EAC && (buffer->width % 16 || buffer->height % 4)) {
         return VG_LITE_INVALID_ARGUMENT;
     }
@@ -858,10 +853,6 @@ vg_lite_error_t vg_lite_init_grad(vg_lite_linear_gradient_t* grad)
 {
     vg_lite_error_t error = VG_LITE_SUCCESS;
 
-#ifdef CONFIG_VG_LITE_TVG_TRACE_API
-    VGLITE_LOG("vg_lite_init_grad %p\n", grad);
-#endif
-
     /* Set the member values according to driver defaults. */
     grad->image.width = VLC_GRADIENT_BUFFER_WIDTH;
     grad->image.height = 1;
@@ -895,11 +886,6 @@ vg_lite_error_t vg_lite_set_linear_grad(vg_lite_ext_linear_gradient_t* grad,
     vg_lite_color_ramp_t* src_ramp;
     vg_lite_color_ramp_t* src_ramp_last;
     vg_lite_color_ramp_t* trg_ramp;
-
-#ifdef CONFIG_VG_LITE_TVG_TRACE_API
-    VGLITE_LOG("vg_lite_set_linear_grad %p %d %p (%f %f %f %f) %d %d\n", grad, count, color_ramp,
-        linear_gradient.X0, linear_gradient.X1, linear_gradient.Y0, linear_gradient.Y1, spread_mode, pre_multiplied);
-#endif
 
     /* Reset the count. */
     trg_count = 0;
@@ -1013,10 +999,6 @@ vg_lite_error_t vg_lite_update_linear_grad(vg_lite_ext_linear_gradient_t* grad)
     uint8_t* bits;
     vg_lite_float_t x0, y0, x1, y1, length;
     vg_lite_error_t error = VG_LITE_SUCCESS;
-
-#ifdef CONFIG_VG_LITE_TVG_TRACE_API
-    VGLITE_LOG("vg_lite_update_linear_grad %p\n", grad);
-#endif
 
     /* Get shortcuts to the color ramp. */
     ramp_length = grad->converted_length;
@@ -1166,11 +1148,6 @@ vg_lite_error_t vg_lite_set_radial_grad(vg_lite_radial_gradient_t* grad,
     vg_lite_color_ramp_t* srcRampLast;
     vg_lite_color_ramp_t* trgRamp;
 
-#ifdef CONFIG_VG_LITE_TVG_TRACE_API
-    VGLITE_LOG("vg_lite_set_radial_grad %p %d %p (%f %f %f %f %f) %d %d\n", grad, count, color_ramp,
-        radial_grad.cx, radial_grad.cy, radial_grad.fx, radial_grad.fy, radial_grad.r, spread_mode, pre_multiplied);
-#endif
-
     /* Reset the count. */
     trgCount = 0;
 
@@ -1283,10 +1260,6 @@ vg_lite_error_t vg_lite_update_radial_grad(vg_lite_radial_gradient_t* grad)
     uint8_t* bits;
     vg_lite_error_t error = VG_LITE_SUCCESS;
     uint32_t align, mul, div;
-
-#ifdef CONFIG_VG_LITE_TVG_TRACE_API
-    VGLITE_LOG("vg_lite_update_radial_grad %p\n", grad);
-#endif
 
     /* Get shortcuts to the color ramp. */
     ramp_length = grad->converted_length;
@@ -1416,10 +1389,6 @@ vg_lite_error_t vg_lite_set_grad(vg_lite_linear_gradient_t* grad,
 {
     uint32_t i;
 
-#ifdef CONFIG_VG_LITE_TVG_TRACE_API
-    VGLITE_LOG("vg_lite_set_grad %p %d %p %p\n", grad, count, colors, stops);
-#endif
-
     grad->count = 0; /* Opaque B&W gradient */
     if (!count || count > VLC_MAX_GRADIENT_STOPS || colors == NULL || stops == NULL)
         return VG_LITE_SUCCESS;
@@ -1451,10 +1420,6 @@ vg_lite_error_t vg_lite_update_grad(vg_lite_linear_gradient_t* grad)
     int32_t j;
     int32_t ds, dr, dg, db, da;
     uint32_t* buffer = (uint32_t*)grad->image.memory;
-
-#ifdef CONFIG_VG_LITE_TVG_TRACE_API
-    VGLITE_LOG("vg_lite_update_grad %p\n", grad);
-#endif
 
     if (grad->count == 0) {
         /* If no valid stops have been specified (e.g., due to an empty input
@@ -1520,10 +1485,6 @@ vg_lite_error_t vg_lite_clear_linear_grad(vg_lite_ext_linear_gradient_t* grad)
 {
     vg_lite_error_t error = VG_LITE_SUCCESS;
 
-#ifdef CONFIG_VG_LITE_TVG_TRACE_API
-    VGLITE_LOG("vg_lite_clear_linear_grad %p\n", grad);
-#endif
-
     grad->count = 0;
     /* Release the image resource. */
     if (grad->image.handle != NULL) {
@@ -1536,10 +1497,6 @@ vg_lite_error_t vg_lite_clear_linear_grad(vg_lite_ext_linear_gradient_t* grad)
 vg_lite_error_t vg_lite_clear_grad(vg_lite_linear_gradient_t* grad)
 {
     vg_lite_error_t error = VG_LITE_SUCCESS;
-
-#ifdef CONFIG_VG_LITE_TVG_TRACE_API
-    VGLITE_LOG("vg_lite_clear_grad %p\n", grad);
-#endif
 
     grad->count = 0;
     /* Release the image resource. */
@@ -1554,10 +1511,6 @@ vg_lite_error_t vg_lite_clear_radial_grad(vg_lite_radial_gradient_t* grad)
 {
     vg_lite_error_t error = VG_LITE_SUCCESS;
 
-#ifdef CONFIG_VG_LITE_TVG_TRACE_API
-    VGLITE_LOG("vg_lite_clear_radial_grad %p\n", grad);
-#endif
-
     grad->count = 0;
     /* Release the image resource. */
     if (grad->image.handle != NULL) {
@@ -1569,28 +1522,16 @@ vg_lite_error_t vg_lite_clear_radial_grad(vg_lite_radial_gradient_t* grad)
 
 vg_lite_matrix_t* vg_lite_get_linear_grad_matrix(vg_lite_ext_linear_gradient_t* grad)
 {
-#ifdef CONFIG_VG_LITE_TVG_TRACE_API
-    VGLITE_LOG("vg_lite_get_linear_grad_matrix %p\n", grad);
-#endif
-
     return &grad->matrix;
 }
 
 vg_lite_matrix_t* vg_lite_get_grad_matrix(vg_lite_linear_gradient_t* grad)
 {
-#ifdef CONFIG_VG_LITE_TVG_TRACE_API
-    VGLITE_LOG("vg_lite_get_grad_matrix %p\n", grad);
-#endif
-
     return &grad->matrix;
 }
 
 vg_lite_matrix_t* vg_lite_get_radial_grad_matrix(vg_lite_radial_gradient_t* grad)
 {
-#ifdef CONFIG_VG_LITE_TVG_TRACE_API
-    VGLITE_LOG("vg_lite_get_radial_grad_matrix %p\n", grad);
-#endif
-
     return &grad->matrix;
 }
 
