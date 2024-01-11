@@ -24,9 +24,6 @@
 *    SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 *
 *****************************************************************************/
-#include "../../lv_conf_internal.h"
-
-#if LV_USE_VG_LITE_TVG
 
 #include <math.h>
 #include <string.h>
@@ -128,5 +125,3 @@ vg_lite_error_t vg_lite_perspective(vg_lite_float_t px, vg_lite_float_t py, vg_l
     multiply(matrix, &p);
     return VG_LITE_SUCCESS;
 }
-
-#endif

@@ -6,8 +6,6 @@
 /*********************
  *      INCLUDES
  *********************/
-#include "../../lv_conf_internal.h"
-#if LV_USE_VG_LITE_TVG
 
 #include "vg_lite.h"
 #include <assert.h>
@@ -15,7 +13,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../../libs/thorvg/thorvg.h"
+#include <thorvg.h>
 #include <thread>
 #include <vector>
 
@@ -2371,4 +2369,3 @@ static void get_format_bytes(vg_lite_buffer_format_t format,
         break;
     }
 }
-#endif
