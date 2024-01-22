@@ -1,5 +1,5 @@
 # vg_lite_tvg
-vg_lite simulator based on ThorVG
+VG-Lite API Simulator based on [ThorVG](https://github.com/thorvg/thorvg)
 
 ## Tiger Path
 ![image](https://github.com/FASTSHIFT/vg_lite_tvg/assets/26767803/35734cbc-e814-4715-9b45-b6a1e5f2c252)
