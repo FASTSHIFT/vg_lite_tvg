@@ -32,9 +32,16 @@
 extern "C" {
 #endif
 
+/**
+ * causes MSVC error C1189.
+ * Not needed because "The __inline keyword is equivalent to inline."
+ * See: https://learn.microsoft.com/en-us/cpp/cpp/inline-functions-cpp?view=msvc-170
+*/
+/*
 #if defined(_MSC_VER)
 #define inline __inline
 #endif
+*/
 
 #include <stddef.h>
 #include <stdint.h>
@@ -589,6 +596,7 @@ typedef unsigned int        vg_lite_color_t;
     typedef enum vg_lite_param_type
     {
         VG_LITE_SCISSOR_RECT,                   /*! count must be 4n for x, y, right, bottom */
+        VG_LITE_GPU_IDLE_STATE,                 /*! 0: busy, 1: idle */
     } vg_lite_param_type_t;
 
 /* VGLite API Structures ******************************************************************************************************************/
