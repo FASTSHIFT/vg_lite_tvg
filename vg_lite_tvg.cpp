@@ -2434,7 +2434,7 @@ static Result picture_load(vg_lite_ctx * ctx, std::unique_ptr<Picture> & picture
         }
     }
 
-    TVG_CHECK_RETURN_RESULT(picture->load((uint32_t *)image_buffer, source->width, source->height, true));
+    TVG_CHECK_RETURN_RESULT(picture->load((uint32_t *)image_buffer, source->width, source->height, false, true));
 
     return Result::Success;
 }
