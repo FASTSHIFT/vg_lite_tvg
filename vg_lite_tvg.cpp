@@ -421,6 +421,19 @@ static vg_lite_converter<vg_color32_t, uint8_t> conv_alpha4_to_bgra8888(
     }
 });
 
+static vg_lite_converter<vg_color32_t, vg_color32_t> conv_rgba8888_to_bgra8888(
+    [](vg_color32_t * dest, const vg_color32_t * src, vg_lite_uint32_t px_size, vg_lite_uint32_t /* color */)
+{
+    while(px_size--) {
+        dest->alpha = src->alpha;
+        dest->red = src->blue;
+        dest->green = src->green;
+        dest->blue = src->red;
+        src++;
+        dest++;
+    }
+});
+
 /**********************
  *      MACROS
  **********************/
@@ -2412,6 +2425,11 @@ static Result picture_load(vg_lite_ctx * ctx, std::unique_ptr<Picture> & picture
 
             case VG_LITE_BGRA8888: {
                     memcpy(image_buffer, source->memory, px_size * sizeof(vg_color32_t));
+                }
+                break;
+
+            case VG_LITE_RGBA8888: {
+                    conv_rgba8888_to_bgra8888.convert(&target, source);
                 }
                 break;
 
