@@ -614,7 +614,11 @@ extern "C" {
 #endif
 
         /* Initialize ThorVG Engine */
+#if LV_VG_LITE_THORVG_USE_RELEASE
+        TVG_CHECK_RETURN_VG_ERROR(Initializer::init(TVG_CANVAS_ENGINE, 0));
+#else
         TVG_CHECK_RETURN_VG_ERROR(Initializer::init(0, TVG_CANVAS_ENGINE));
+#endif
         return VG_LITE_SUCCESS;
     }
 
@@ -667,7 +671,11 @@ extern "C" {
         }
 
         TVG_CHECK_RETURN_VG_ERROR(ctx->canvas->sync());
+#if LV_VG_LITE_THORVG_USE_RELEASE
+        TVG_CHECK_RETURN_VG_ERROR(ctx->canvas->clear(true));
+#else
         TVG_CHECK_RETURN_VG_ERROR(ctx->canvas->clear(true, false));
+#endif
 
         /* make sure target buffer is valid */
         LV_ASSERT_NULL(ctx->target_buffer);
@@ -2452,7 +2460,11 @@ static Result picture_load(vg_lite_ctx * ctx, std::unique_ptr<Picture> & picture
         }
     }
 
+#if LV_VG_LITE_THORVG_USE_RELEASE
+    TVG_CHECK_RETURN_RESULT(picture->load((uint32_t *)image_buffer, source->width, source->height, true));
+#else
     TVG_CHECK_RETURN_RESULT(picture->load((uint32_t *)image_buffer, source->width, source->height, false, true));
+#endif
 
     return Result::Success;
 }
