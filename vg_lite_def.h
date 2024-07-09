@@ -15,6 +15,7 @@
 #define LV_ASSERT assert
 #define LV_ASSERT_NULL(ptr) assert(ptr!= NULL)
 
+#define lv_memzero(dst, size) memset(dst, 0, size)
 #define lv_memcpy memcpy
 #define lv_free free
 static inline void* lv_malloc_zeroed(size_t size) { 
