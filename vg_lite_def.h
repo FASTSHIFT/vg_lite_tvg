@@ -9,10 +9,14 @@
 
 #define LV_USE_VG_LITE_THORVG 1
 
-#define LV_USE_VG_LITE_MAIN 0
+#ifndef LV_USE_VG_LITE_MAIN
+#define LV_USE_VG_LITE_MAIN 1
+#endif
 
 /* 1: Use thorvg release version, 0: Use thorvg main branch version */
+#ifndef LV_VG_LITE_THORVG_USE_RELEASE
 #define LV_VG_LITE_THORVG_USE_RELEASE 0
+#endif
 
 #define LV_ASSERT assert
 #define LV_ASSERT_NULL(ptr) assert(ptr!= NULL)
@@ -41,10 +45,10 @@ static inline void* lv_malloc_zeroed(size_t size) {
 #define LV_VG_LITE_THORVG_LINEAR_GRADIENT_EXT_SUPPORT 0
 
 /*Enable 16 pixels alignment*/
-#define LV_VG_LITE_THORVG_16PIXELS_ALIGN 0
+#define LV_VG_LITE_THORVG_16PIXELS_ALIGN 1
 
 /*Buffer address alignment*/
-#define LV_VG_LITE_THORVG_BUF_ADDR_ALIGN 4
+#define LV_VG_LITE_THORVG_BUF_ADDR_ALIGN 64
 
 /*Enable multi-thread render*/
 #define LV_VG_LITE_THORVG_THREAD_RENDER 0

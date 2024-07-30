@@ -7,28 +7,3 @@ menuconfig GRAPHICS_VG_LITE_TVG
 	bool "VG-Lite Simulator"
 	depends on LIB_THORVG
 	default n
-
-if GRAPHICS_VG_LITE_TVG
-
-config VG_LITE_TVG_16PIXELS_ALIGN
-	bool "Enable 16 pixels align requirement"
-	default y
-
-config VG_LITE_TVG_BUF_ADDR_ALIGN
-	int "Buffer address alignment"
-	default 64
-
-config VG_LITE_TVG_LVGL_BLEND_SUPPORT
-	bool "Enable LVGL blend mode support"
-	default n
-
-config VG_LITE_TVG_YUV_SUPPORT
-	bool "Enable YUV support"
-	depends on LIBYUV
-	default y
-
-config VG_LITE_TVG_THREAD_RENDER
-	bool "Enable multi-thread render"
-	default n
-
-endif # GRAPHICS_VG_LITE_TVG

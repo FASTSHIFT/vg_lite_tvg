@@ -30,4 +30,7 @@ CXXFLAGS += ${INCDIR_PREFIX}$(APPDIR)/apps/graphics/libyuv/libyuv/include
 CSRCS   += $(wildcard *.c)
 CXXSRCS += $(wildcard *.cpp)
 
+CFLAGS   += -DLV_USE_VG_LITE_MAIN=0 -DLV_VG_LITE_THORVG_USE_RELEASE=1
+CXXFLAGS += -DLV_USE_VG_LITE_MAIN=0 -DLV_VG_LITE_THORVG_USE_RELEASE=1
+
 include $(APPDIR)/Application.mk
