@@ -10,7 +10,7 @@
 #define LV_USE_VG_LITE_THORVG 1
 
 /* 1: Use thorvg release version, 0: Use thorvg main branch version */
-#define LV_VG_LITE_THORVG_USE_RELEASE 1
+#define LV_VG_LITE_THORVG_USE_RELEASE 0
 
 #define LV_ASSERT assert
 #define LV_ASSERT_NULL(ptr) assert(ptr!= NULL)

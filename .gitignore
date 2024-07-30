@@ -35,3 +35,6 @@
 .depend
 .built
 Make.dep
+
+# CMake generated files
+build
