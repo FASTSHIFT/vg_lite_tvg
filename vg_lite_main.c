@@ -31,6 +31,7 @@
 
 #include "vg_lite.h"
 #include <getopt.h>
+#include <png.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -67,6 +68,7 @@
 
 typedef struct
 {
+    const char* output_path;
     const char* func_name;
 
     vg_lite_buffer_t target;
@@ -85,14 +87,18 @@ typedef struct
 
     vg_lite_color_t color;
     vg_lite_color_t pattern_color;
+    vg_lite_color_t source_color;
 } vg_lite_context_t;
 
 /**********************
  *  STATIC PROTOTYPES
  **********************/
 
-static int parse_commandline(int argc, char** argv, vg_lite_context_t* context);
+static void vg_lite_context_init(vg_lite_context_t* context);
+static void vg_lite_context_deinit(vg_lite_context_t* context);
 static void vg_lite_run_test(vg_lite_context_t* context);
+static int parse_commandline(int argc, char** argv, vg_lite_context_t* context);
+static int save_buffer(const char* filename, const vg_lite_buffer_t* buffer);
 
 /**********************
  *  STATIC VARIABLES
@@ -109,7 +115,6 @@ static void vg_lite_run_test(vg_lite_context_t* context);
 int main(int argc, char** argv)
 {
     static bool is_initialized = false;
-
     if (!is_initialized) {
         /* Initialize the GPU */
         extern void gpu_init(void);
@@ -118,9 +123,10 @@ int main(int argc, char** argv)
     }
 
     vg_lite_context_t context;
+    vg_lite_context_init(&context);
 
     if (parse_commandline(argc, argv, &context) < 0) {
-        goto error_handler;
+        return EXIT_FAILURE;
     }
 
     /* Create a target buffer */
@@ -129,11 +135,10 @@ int main(int argc, char** argv)
 
     vg_lite_run_test(&context);
 
-error_handler:
-    vg_lite_free(&context.target);
-    vg_lite_free(&context.source);
-    vg_lite_clear_path(&context.path);
+    save_buffer(context.output_path, &context.target);
 
+error_handler:
+    vg_lite_context_deinit(&context);
     return 0;
 }
 
@@ -141,15 +146,70 @@ error_handler:
  *   STATIC FUNCTIONS
  **********************/
 
-static vg_lite_error_t vg_lite_draw_custom(vg_lite_context_t* context)
+#include "vg_lite_custom.h"
+
+static void vg_lite_context_init(vg_lite_context_t* context)
 {
-    /* Draw something here */
-    return VG_LITE_SUCCESS;
+    memset(context, 0, sizeof(vg_lite_context_t));
+    context->output_path = "target.png";
+    context->func_name = "vg_lite_blit_rect";
+    context->target.format = VG_LITE_BGRA8888;
+    context->target.width = 480;
+    context->target.height = 480;
+    context->source.format = VG_LITE_BGRA8888;
+    context->source.width = 240;
+    context->source.height = 240;
+    context->source_color = 0xFFFF0000;
+    vg_lite_identity(&context->matrix);
+    vg_lite_identity(&context->pattern_matrix);
+    context->rect.x = 0;
+    context->rect.y = 0;
+    context->rect.width = 480;
+    context->rect.height = 480;
+    context->blend = VG_LITE_BLEND_SRC_OVER;
+    context->fill_rule = VG_LITE_FILL_EVEN_ODD;
+    context->filter = VG_LITE_FILTER_BI_LINEAR;
+
+    vg_lite_init_path(
+        &context->path,
+        VG_LITE_S16,
+        VG_LITE_HIGH,
+        sizeof(custom_path_data),
+        (void*)custom_path_data,
+        0, 0, 100, 100);
+}
+
+static void vg_lite_context_deinit(vg_lite_context_t* context)
+{
+    if (context->target.memory) {
+        vg_lite_free(&context->target);
+        memset(&context->target, 0, sizeof(vg_lite_buffer_t));
+    }
+
+    if (context->source.memory) {
+        vg_lite_free(&context->source);
+        memset(&context->source, 0, sizeof(vg_lite_buffer_t));
+    }
 }
 
 static void vg_lite_run_test(vg_lite_context_t* context)
 {
-    if (IS_STR_EQUAL(context->func_name, "vg_lite_clear")) {
+    printf(VG_LITE_PREFIX "Running test function: %s\n", context->func_name);
+
+    /* Clear buffer */
+    VG_LITE_CHECK_ERROR(vg_lite_clear(
+        &context->target,
+        NULL,
+        0xFFFFFFFF));
+    VG_LITE_CHECK_ERROR(vg_lite_clear(
+        &context->source,
+        NULL,
+        context->source_color));
+
+    /* Run test function */
+    if (IS_STR_EQUAL(context->func_name, "vg_lite_draw_custom")) {
+        VG_LITE_CHECK_ERROR(vg_lite_draw_custom(context));
+    } else if (IS_STR_EQUAL(context->func_name, "vg_lite_clear")) {
         VG_LITE_CHECK_ERROR(vg_lite_clear(
             &context->target,
             &context->rect,
@@ -192,8 +252,6 @@ static void vg_lite_run_test(vg_lite_context_t* context)
             context->pattern_color,
             context->color,
             context->filter));
-    } else if (IS_STR_EQUAL(context->func_name, "vg_lite_draw_custom")) {
-        VG_LITE_CHECK_ERROR(vg_lite_draw_custom(context));
     } else {
         printf(VG_LITE_PREFIX "Unknown function name: %s\n", context->func_name);
     }
@@ -206,39 +264,43 @@ error_handler:
 
 static void show_usage(const char* progname)
 {
-    printf(VG_LITE_PREFIX "\nUsage: %s"
-                          " --func <string>"
-                          " --target <string>"
-                          " --source <string>"
-                          " --matrix <string>"
-                          " --pattern-matrix <string>"
-                          " --rect <string>"
-                          " --path <string>"
-                          " --path-bounding-box <string>"
-                          " --blend <string>"
-                          " --fill-rule <string>"
-                          " --filter <string>"
-                          " --pattern-mode <string>"
-                          " --color <hex-value>"
-                          " --pattern-color <hex-value>"
-                          "\n",
+    printf("\nUsage: %s"
+           " -h"
+           " -o <string>"
+           " --func <string>"
+           " --target <string>"
+           " --source <string>"
+           " --matrix <string>"
+           " --pattern-matrix <string>\n"
+           " --rect <string>"
+           " --path-bounding-box <string>"
+           " --blend <string>"
+           " --fill-rule <string>\n"
+           " --filter <string>"
+           " --pattern-mode <string>"
+           " --color <hex-value>"
+           " --pattern-color <hex-value>"
+           " --source-color <hex-value>\n"
+           "\n",
         progname);
 
-    printf(VG_LITE_PREFIX "\nWhere:\n");
-    printf(VG_LITE_PREFIX "  --func <string> Test case function name.\n");
-    printf(VG_LITE_PREFIX "  --target <string> Target buffer arguments in the format of 'width,height,format,color'.\n");
-    printf(VG_LITE_PREFIX "  --source <string> Source buffer arguments in the format of 'width,height,format,color'.\n");
-    printf(VG_LITE_PREFIX "  --matrix <string> Matrix arguments in the format of 'm[3][3]' (e.g. '1,0,0,0,1,0,0,0,1').\n");
-    printf(VG_LITE_PREFIX "  --pattern-matrix <string> Pattern matrix arguments in the format of 'm[3][3]' (e.g. '1,0,0,0,1,0,0,0,1').\n");
-    printf(VG_LITE_PREFIX "  --rect <string> Rectangle arguments in the format of 'x,y,width,height' (e.g. '0,0,100,100').\n");
-    printf(VG_LITE_PREFIX "  --path <string> Path arguments in the format of 'cmdN,pointsN...' (e.g. 'VLC_OP_MOVE,0,0,VLC_OP_LINE,100,100,VLC_OP_LINE,0,100,VLC_OP_CLOSE,VLC_OP_END').\n");
-    printf(VG_LITE_PREFIX "  --path-bounding-box <string> Path bonding box arguments in the format of 'min_x,min_y,max_x,max_y' (e.g. '0,0,100,100').\n");
-    printf(VG_LITE_PREFIX "  --blend <string> Blend mode, see enum vg_lite_blend_t.\n");
-    printf(VG_LITE_PREFIX "  --fill-rule <string> Fill rule, see enum vg_lite_fill_t.\n");
-    printf(VG_LITE_PREFIX "  --filter <string> Filter', see enum vg_lite_filter_t.\n");
-    printf(VG_LITE_PREFIX "  --pattern-mode <string> Pattern mode', see enum vg_lite_pattern_mode_t.\n");
-    printf(VG_LITE_PREFIX "  --color <hex-value> Color in the format of '0xAARRGGBB'.\n");
-    printf(VG_LITE_PREFIX "  --pattern-color <hex-value> Pattern Color in the format of '0xAARRGGBB'.\n");
+    printf("\nWhere:\n");
+    printf("  -h Show this help message.\n");
+    printf("  -o <string> Output file path.\n");
+    printf("  --func <string> Test case function name.\n");
+    printf("  --target <string> Target buffer arguments in the format of 'width,height,format'.\n");
+    printf("  --source <string> Source buffer arguments in the format of 'width,height,format'.\n");
+    printf("  --matrix <string> Matrix arguments in the format of 'm[3][3]' (e.g. '1,0,0,0,1,0,0,0,1').\n");
+    printf("  --pattern-matrix <string> Pattern matrix arguments in the format of 'm[3][3]' (e.g. '1,0,0,0,1,0,0,0,1').\n");
+    printf("  --rect <string> Rectangle arguments in the format of 'x,y,width,height' (e.g. '0,0,100,100').\n");
+    printf("  --path-bounding-box <string> Path bonding box arguments in the format of 'min_x,min_y,max_x,max_y' (e.g. '0,0,100,100').\n");
+    printf("  --blend <string> Blend mode, see enum vg_lite_blend_t.\n");
+    printf("  --fill-rule <string> Fill rule, see enum vg_lite_fill_t.\n");
+    printf("  --filter <string> Filter', see enum vg_lite_filter_t.\n");
+    printf("  --pattern-mode <string> Pattern mode', see enum vg_lite_pattern_mode_t.\n");
+    printf("  --color <hex-value> Color in the format of 'AABBGGRR'.\n");
+    printf("  --pattern-color <hex-value> Pattern Color in the format of 'AABBGGRR'.\n");
+    printf("  --source-color <hex-value> Source color in the format of 'AABBGGRR'.\n");
 }
 
 static vg_lite_buffer_format_t parse_buffer_format_args(const char* str)
@@ -303,31 +365,70 @@ static vg_lite_buffer_format_t parse_buffer_format_args(const char* str)
 
 static int parse_buffer_args(vg_lite_buffer_t* buffer, const char* str)
 {
+    char format_str[32] = { 0 };
+    int num = sscanf(str, "%d,%d,%31s", &buffer->width, &buffer->height, format_str);
+    if (num != 3) {
+        printf(VG_LITE_PREFIX "Invalid buffer arguments: %s\n", str);
+        return -1;
+    }
+
+    buffer->format = parse_buffer_format_args(format_str);
+
     return 0;
 }
 
 static int parse_matrix_args(vg_lite_matrix_t* matrix, const char* str)
 {
+    int num = sscanf(str,
+        "%f,%f,%f,%f,%f,%f,%f,%f,%f",
+        &matrix->m[0][0], &matrix->m[0][1], &matrix->m[0][2],
+        &matrix->m[1][0], &matrix->m[1][1], &matrix->m[1][2],
+        &matrix->m[2][0], &matrix->m[2][1], &matrix->m[2][2]);
+
+    if (num != 9) {
+        printf(VG_LITE_PREFIX "Invalid matrix arguments: %s\n", str);
+        return -1;
+    }
+
     return 0;
 }
 
 static int parse_rect_args(vg_lite_rectangle_t* rect, const char* str)
 {
+    int num = sscanf(str, "%d,%d,%d,%d", &rect->x, &rect->y, &rect->width, &rect->height);
+    if (num != 4) {
+        printf(VG_LITE_PREFIX "Invalid rectangle arguments: %s\n", str);
+        return -1;
+    }
+
     return 0;
 }
 
 static vg_lite_color_t parse_color_args(const char* str)
 {
-    return 0;
-}
+    char* ptr;
+    uint32_t color = strtoul(str, &ptr, 16);
+    if (*ptr != '\0') {
+        printf(VG_LITE_PREFIX "Invalid color arguments: %s\n", str);
+        return -1;
+    }
 
-static int parse_path_args(vg_lite_path_t* path, const char* str)
-{
-    return 0;
+    return color;
 }
 
 static int parse_path_bounding_box_args(vg_lite_path_t* path, const char* str)
 {
+    int num = sscanf(str,
+        "%f,%f,%f,%f",
+        &path->bounding_box[0],
+        &path->bounding_box[1],
+        &path->bounding_box[2],
+        &path->bounding_box[3]);
+    if (num != 4) {
+        printf(VG_LITE_PREFIX "Invalid path bounding box arguments: %s\n", str);
+        return -1;
+    }
+
     return 0;
 }
 
@@ -385,9 +486,10 @@ static vg_lite_pattern_mode_t parse_pattern_mode_args(const char* str)
     return VG_LITE_PATTERN_COLOR;
 }
 
-static int parse_long_commandline(int longindex, vg_lite_context_t* context)
+static int parse_long_commandline(int longindex, const struct option* longopts, vg_lite_context_t* context)
 {
     int retval = 0;
+    printf(VG_LITE_PREFIX "longindex: %d(%s), optarg: %s\n", longindex, longopts[longindex].name, optarg);
     switch (longindex) {
     case 0:
         context->func_name = optarg;
@@ -414,35 +516,35 @@ static int parse_long_commandline(int longindex, vg_lite_context_t* context)
         break;
 
     case 6:
-        retval = parse_path_args(&context->path, optarg);
-        break;
-
-    case 7:
         retval = parse_path_bounding_box_args(&context->path, optarg);
         break;
 
-    case 8:
+    case 7:
         context->blend = parse_blend_args(optarg);
         break;
 
-    case 9:
+    case 8:
         context->fill_rule = parse_fill_rule_args(optarg);
         break;
 
-    case 10:
+    case 9:
         context->filter = parse_filter_args(optarg);
         break;
 
-    case 11:
+    case 10:
         context->pattern_mode = parse_pattern_mode_args(optarg);
         break;
 
-    case 12:
+    case 11:
         context->color = parse_color_args(optarg);
         break;
 
-    case 13:
+    case 12:
         context->pattern_color = parse_color_args(optarg);
+        break;
+
+    case 13:
+        context->source_color = parse_color_args(optarg);
         break;
 
     default:
@@ -455,22 +557,17 @@ static int parse_long_commandline(int longindex, vg_lite_context_t* context)
 
 static int parse_commandline(int argc, char** argv, vg_lite_context_t* context)
 {
-    memset(context, 0, sizeof(vg_lite_context_t));
-    vg_lite_identity(&context->matrix);
-    vg_lite_identity(&context->pattern_matrix);
-
-    const char* shortopt = "h:";
+    const char* shortopt = "ho:";
 
     int ch;
     int longindex = 0;
-    static const struct option longopts[] = {
+    const struct option longopts[] = {
         { "func", required_argument, NULL, 0 },
         { "target", required_argument, NULL, 0 },
         { "source", required_argument, NULL, 0 },
         { "matrix", required_argument, NULL, 0 },
         { "pattern-matrix", required_argument, NULL, 0 },
         { "rect", required_argument, NULL, 0 },
-        { "path", required_argument, NULL, 0 },
         { "path-bounding-box", required_argument, NULL, 0 },
         { "blend", required_argument, NULL, 0 },
         { "fill-rule", required_argument, NULL, 0 },
@@ -478,15 +575,20 @@ static int parse_commandline(int argc, char** argv, vg_lite_context_t* context)
         { "pattern-mode", required_argument, NULL, 0 },
         { "color", required_argument, NULL, 0 },
         { "pattern-color", required_argument, NULL, 0 },
+        { "source-color", required_argument, NULL, 0 },
         { 0, 0, NULL, 0 }
     };
 
     while ((ch = getopt_long(argc, argv, shortopt, longopts, &longindex)) >= 0) {
         switch (ch) {
         case 0:
-            if (parse_long_commandline(longindex, context) < 0) {
+            if (parse_long_commandline(longindex, longopts, context) < 0) {
                 return -1;
             }
+            break;
+
+        case 'o':
+            context->output_path = optarg;
             break;
 
         case 'h':
@@ -500,13 +602,56 @@ static int parse_commandline(int argc, char** argv, vg_lite_context_t* context)
         }
     }
 
-    if (!context->func_name) {
-        printf(VG_LITE_PREFIX "Missing function name\n");
-        show_usage(argv[0]);
+    return 0;
+}
+
+static int save_buffer(const char* filename, const vg_lite_buffer_t* buffer)
+{
+    printf(VG_LITE_PREFIX "Save buffer to %s\n", filename);
+
+    /* Construct the PNG image structure. */
+    png_image image;
+    memset(&image, 0, sizeof(image));
+
+    image.version = PNG_IMAGE_VERSION;
+    image.width = buffer->width;
+    image.height = buffer->height;
+
+    switch (buffer->format) {
+    case VG_LITE_RGB888:
+        image.format = PNG_FORMAT_RGB;
+        break;
+    case VG_LITE_BGR888:
+        image.format = PNG_FORMAT_BGR;
+        break;
+    case VG_LITE_RGBX8888:
+    case VG_LITE_RGBA8888:
+        image.format = PNG_FORMAT_RGBA;
+        break;
+    case VG_LITE_XRGB8888:
+    case VG_LITE_ARGB8888:
+        image.format = PNG_FORMAT_ARGB;
+        break;
+    case VG_LITE_BGRX8888:
+    case VG_LITE_BGRA8888:
+        image.format = PNG_FORMAT_BGRA;
+        break;
+    case VG_LITE_XBGR8888:
+    case VG_LITE_ABGR8888:
+        image.format = PNG_FORMAT_ABGR;
+        break;
+    default:
+        printf(VG_LITE_PREFIX "Unsupport format: %d\n", buffer->format);
         return -1;
     }
 
-    return 0;
+    /* Write the PNG image. */
+    int success = png_image_write_to_file(&image, filename, 0, buffer->memory, buffer->stride, NULL);
+    if (!success) {
+        printf(VG_LITE_PREFIX "Failed to save image\n");
+    }
+
+    return success;
 }
 
 #endif /* LV_USE_VG_LITE_MAIN */
