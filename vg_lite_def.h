@@ -2,10 +2,15 @@
 #define VG_LITE_CONF_H
 
 #include <assert.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define LV_USE_DRAW_VG_LITE 1
+
+/* Enable VG-Lite custom external 'gpu_init()' function */
+#ifndef LV_VG_LITE_USE_GPU_INIT
+#define LV_VG_LITE_USE_GPU_INIT 1
+#endif
 
 #define LV_USE_VG_LITE_THORVG 1
 
@@ -19,12 +24,13 @@
 #endif
 
 #define LV_ASSERT assert
-#define LV_ASSERT_NULL(ptr) assert(ptr!= NULL)
+#define LV_ASSERT_NULL(ptr) assert(ptr != NULL)
 
 #define lv_memzero(dst, size) memset(dst, 0, size)
 #define lv_memcpy memcpy
 #define lv_free free
-static inline void* lv_malloc_zeroed(size_t size) { 
+static inline void* lv_malloc_zeroed(size_t size)
+{
     void* ptr = malloc(size);
     memset(ptr, 0, size);
     return ptr;

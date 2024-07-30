@@ -114,6 +114,7 @@ static int save_buffer(const char* filename, const vg_lite_buffer_t* buffer);
 
 int main(int argc, char** argv)
 {
+#if LV_VG_LITE_USE_GPU_INIT
     static bool is_initialized = false;
     if (!is_initialized) {
         /* Initialize the GPU */
@@ -121,6 +122,7 @@ int main(int argc, char** argv)
         gpu_init();
         is_initialized = true;
     }
+#endif
 
     vg_lite_context_t context;
     vg_lite_context_init(&context);
