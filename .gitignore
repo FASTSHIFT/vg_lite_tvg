@@ -39,5 +39,6 @@ Make.dep
 # CMake generated files
 build
 
-# VSCode
+# Others
 .vscode
+*.png
