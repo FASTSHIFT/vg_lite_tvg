@@ -38,3 +38,6 @@ Make.dep
 
 # CMake generated files
 build
+
+# VSCode
+.vscode

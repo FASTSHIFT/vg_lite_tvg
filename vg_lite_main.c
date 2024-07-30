@@ -21,9 +21,492 @@
  * SOFTWARE.
  */
 
-#include "vg_lite.h"
+/*********************
+ *      INCLUDES
+ *********************/
 
-int main(int argc, const char *argv[])
+#include "vg_lite_def.h"
+
+#if LV_USE_VG_LITE_MAIN
+
+#include "vg_lite.h"
+#include <getopt.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+/*********************
+ *      DEFINES
+ *********************/
+
+#define VG_LITE_PREFIX "VG-Lite: "
+
+#define IS_STR_EQUAL(str1, str2) (strcmp(str1, str2) == 0)
+
+#define VG_LITE_IS_ERROR(err) ((err) != VG_LITE_SUCCESS)
+
+#define VG_LITE_CHECK_ERROR(func)                                                      \
+    do {                                                                               \
+        vg_lite_error_t error_code = func;                                             \
+        if (VG_LITE_IS_ERROR(error_code)) {                                            \
+            printf(VG_LITE_PREFIX "Execute '" #func "' error: %d\n", (int)error_code); \
+            goto error_handler;                                                        \
+        }                                                                              \
+    } while (0)
+
+#define STRING_TO_ENUM(e)          \
+    do {                           \
+        if (IS_STR_EQUAL(str, #e)) \
+            return e;              \
+    } while (0)
+
+/**********************
+ *      TYPEDEFS
+ **********************/
+
+typedef struct
+{
+    const char* func_name;
+
+    vg_lite_buffer_t target;
+    vg_lite_buffer_t source;
+
+    vg_lite_path_t path;
+
+    vg_lite_matrix_t matrix;
+    vg_lite_matrix_t pattern_matrix;
+    vg_lite_rectangle_t rect;
+
+    vg_lite_blend_t blend;
+    vg_lite_fill_t fill_rule;
+    vg_lite_filter_t filter;
+    vg_lite_pattern_mode_t pattern_mode;
+
+    vg_lite_color_t color;
+    vg_lite_color_t pattern_color;
+} vg_lite_context_t;
+
+/**********************
+ *  STATIC PROTOTYPES
+ **********************/
+
+static int parse_commandline(int argc, char** argv, vg_lite_context_t* context);
+static void vg_lite_run_test(vg_lite_context_t* context);
+
+/**********************
+ *  STATIC VARIABLES
+ **********************/
+
+/**********************
+ *      MACROS
+ **********************/
+
+/**********************
+ *   GLOBAL FUNCTIONS
+ **********************/
+
+int main(int argc, char** argv)
+{
+    static bool is_initialized = false;
+
+    if (!is_initialized) {
+        /* Initialize the GPU */
+        extern void gpu_init(void);
+        gpu_init();
+        is_initialized = true;
+    }
+
+    vg_lite_context_t context;
+
+    if (parse_commandline(argc, argv, &context) < 0) {
+        goto error_handler;
+    }
+
+    /* Create a target buffer */
+    VG_LITE_CHECK_ERROR(vg_lite_allocate(&context.target));
+    VG_LITE_CHECK_ERROR(vg_lite_allocate(&context.source));
+
+    vg_lite_run_test(&context);
+
+error_handler:
+    vg_lite_free(&context.target);
+    vg_lite_free(&context.source);
+    vg_lite_clear_path(&context.path);
+
+    return 0;
+}
+
+/**********************
+ *   STATIC FUNCTIONS
+ **********************/
+
+static vg_lite_error_t vg_lite_draw_custom(vg_lite_context_t* context)
+{
+    /* Draw something here */
+    return VG_LITE_SUCCESS;
+}
+
+static void vg_lite_run_test(vg_lite_context_t* context)
+{
+    if (IS_STR_EQUAL(context->func_name, "vg_lite_clear")) {
+        VG_LITE_CHECK_ERROR(vg_lite_clear(
+            &context->target,
+            &context->rect,
+            context->color));
+    } else if (IS_STR_EQUAL(context->func_name, "vg_lite_blit")) {
+        VG_LITE_CHECK_ERROR(vg_lite_blit(
+            &context->target,
+            &context->source,
+            &context->matrix,
+            context->blend,
+            context->color,
+            context->filter));
+    } else if (IS_STR_EQUAL(context->func_name, "vg_lite_blit_rect")) {
+        VG_LITE_CHECK_ERROR(vg_lite_blit_rect(
+            &context->target,
+            &context->source,
+            &context->rect,
+            &context->matrix,
+            context->blend,
+            context->color,
+            context->filter));
+    } else if (IS_STR_EQUAL(context->func_name, "vg_lite_draw")) {
+        VG_LITE_CHECK_ERROR(vg_lite_draw(
+            &context->target,
+            &context->path,
+            context->fill_rule,
+            &context->matrix,
+            context->blend,
+            context->color));
+    } else if (IS_STR_EQUAL(context->func_name, "vg_lite_draw_pattern")) {
+        VG_LITE_CHECK_ERROR(vg_lite_draw_pattern(
+            &context->target,
+            &context->path,
+            context->fill_rule,
+            &context->matrix,
+            &context->source,
+            &context->pattern_matrix,
+            context->blend,
+            context->pattern_mode,
+            context->pattern_color,
+            context->color,
+            context->filter));
+    } else if (IS_STR_EQUAL(context->func_name, "vg_lite_draw_custom")) {
+        VG_LITE_CHECK_ERROR(vg_lite_draw_custom(context));
+    } else {
+        printf(VG_LITE_PREFIX "Unknown function name: %s\n", context->func_name);
+    }
+
+    VG_LITE_CHECK_ERROR(vg_lite_finish());
+
+error_handler:
+    printf(VG_LITE_PREFIX "Test finished\n");
+}
+
+static void show_usage(const char* progname)
+{
+    printf(VG_LITE_PREFIX "\nUsage: %s"
+                          " --func <string>"
+                          " --target <string>"
+                          " --source <string>"
+                          " --matrix <string>"
+                          " --pattern-matrix <string>"
+                          " --rect <string>"
+                          " --path <string>"
+                          " --path-bounding-box <string>"
+                          " --blend <string>"
+                          " --fill-rule <string>"
+                          " --filter <string>"
+                          " --pattern-mode <string>"
+                          " --color <hex-value>"
+                          " --pattern-color <hex-value>"
+                          "\n",
+        progname);
+
+    printf(VG_LITE_PREFIX "\nWhere:\n");
+    printf(VG_LITE_PREFIX "  --func <string> Test case function name.\n");
+    printf(VG_LITE_PREFIX "  --target <string> Target buffer arguments in the format of 'width,height,format,color'.\n");
+    printf(VG_LITE_PREFIX "  --source <string> Source buffer arguments in the format of 'width,height,format,color'.\n");
+    printf(VG_LITE_PREFIX "  --matrix <string> Matrix arguments in the format of 'm[3][3]' (e.g. '1,0,0,0,1,0,0,0,1').\n");
+    printf(VG_LITE_PREFIX "  --pattern-matrix <string> Pattern matrix arguments in the format of 'm[3][3]' (e.g. '1,0,0,0,1,0,0,0,1').\n");
+    printf(VG_LITE_PREFIX "  --rect <string> Rectangle arguments in the format of 'x,y,width,height' (e.g. '0,0,100,100').\n");
+    printf(VG_LITE_PREFIX "  --path <string> Path arguments in the format of 'cmdN,pointsN...' (e.g. 'VLC_OP_MOVE,0,0,VLC_OP_LINE,100,100,VLC_OP_LINE,0,100,VLC_OP_CLOSE,VLC_OP_END').\n");
+    printf(VG_LITE_PREFIX "  --path-bounding-box <string> Path bonding box arguments in the format of 'min_x,min_y,max_x,max_y' (e.g. '0,0,100,100').\n");
+    printf(VG_LITE_PREFIX "  --blend <string> Blend mode, see enum vg_lite_blend_t.\n");
+    printf(VG_LITE_PREFIX "  --fill-rule <string> Fill rule, see enum vg_lite_fill_t.\n");
+    printf(VG_LITE_PREFIX "  --filter <string> Filter', see enum vg_lite_filter_t.\n");
+    printf(VG_LITE_PREFIX "  --pattern-mode <string> Pattern mode', see enum vg_lite_pattern_mode_t.\n");
+    printf(VG_LITE_PREFIX "  --color <hex-value> Color in the format of '0xAARRGGBB'.\n");
+    printf(VG_LITE_PREFIX "  --pattern-color <hex-value> Pattern Color in the format of '0xAARRGGBB'.\n");
+}
+
+static vg_lite_buffer_format_t parse_buffer_format_args(const char* str)
+{
+    STRING_TO_ENUM(VG_LITE_RGBA8888);
+    STRING_TO_ENUM(VG_LITE_BGRA8888);
+    STRING_TO_ENUM(VG_LITE_RGBX8888);
+    STRING_TO_ENUM(VG_LITE_BGRX8888);
+    STRING_TO_ENUM(VG_LITE_RGB565);
+    STRING_TO_ENUM(VG_LITE_BGR565);
+    STRING_TO_ENUM(VG_LITE_RGBA4444);
+    STRING_TO_ENUM(VG_LITE_BGRA4444);
+    STRING_TO_ENUM(VG_LITE_BGRA5551);
+    STRING_TO_ENUM(VG_LITE_A4);
+    STRING_TO_ENUM(VG_LITE_A8);
+    STRING_TO_ENUM(VG_LITE_L8);
+    STRING_TO_ENUM(VG_LITE_YUYV);
+    STRING_TO_ENUM(VG_LITE_YUY2);
+    STRING_TO_ENUM(VG_LITE_ANV12);
+    STRING_TO_ENUM(VG_LITE_AYUY2);
+    STRING_TO_ENUM(VG_LITE_NV12);
+    STRING_TO_ENUM(VG_LITE_YV12);
+    STRING_TO_ENUM(VG_LITE_YV24);
+    STRING_TO_ENUM(VG_LITE_YV16);
+    STRING_TO_ENUM(VG_LITE_NV16);
+    STRING_TO_ENUM(VG_LITE_YUY2_TILED);
+    STRING_TO_ENUM(VG_LITE_NV12_TILED);
+    STRING_TO_ENUM(VG_LITE_ANV12_TILED);
+    STRING_TO_ENUM(VG_LITE_AYUY2_TILED);
+    STRING_TO_ENUM(VG_LITE_RGBA2222);
+    STRING_TO_ENUM(VG_LITE_BGRA2222);
+    STRING_TO_ENUM(VG_LITE_ABGR2222);
+    STRING_TO_ENUM(VG_LITE_ARGB2222);
+    STRING_TO_ENUM(VG_LITE_ABGR4444);
+    STRING_TO_ENUM(VG_LITE_ARGB4444);
+    STRING_TO_ENUM(VG_LITE_ABGR8888);
+    STRING_TO_ENUM(VG_LITE_ARGB8888);
+    STRING_TO_ENUM(VG_LITE_ABGR1555);
+    STRING_TO_ENUM(VG_LITE_RGBA5551);
+    STRING_TO_ENUM(VG_LITE_ARGB1555);
+    STRING_TO_ENUM(VG_LITE_XBGR8888);
+    STRING_TO_ENUM(VG_LITE_XRGB8888);
+    STRING_TO_ENUM(VG_LITE_RGBA8888_ETC2_EAC);
+    STRING_TO_ENUM(VG_LITE_RGB888);
+    STRING_TO_ENUM(VG_LITE_BGR888);
+    STRING_TO_ENUM(VG_LITE_ABGR8565);
+    STRING_TO_ENUM(VG_LITE_BGRA5658);
+    STRING_TO_ENUM(VG_LITE_ARGB8565);
+    STRING_TO_ENUM(VG_LITE_RGBA5658);
+    STRING_TO_ENUM(VG_LITE_ABGR8565_PLANAR);
+    STRING_TO_ENUM(VG_LITE_BGRA5658_PLANAR);
+    STRING_TO_ENUM(VG_LITE_ARGB8565_PLANAR);
+    STRING_TO_ENUM(VG_LITE_RGBA5658_PLANAR);
+    STRING_TO_ENUM(VG_LITE_INDEX_1);
+    STRING_TO_ENUM(VG_LITE_INDEX_2);
+    STRING_TO_ENUM(VG_LITE_INDEX_4);
+    STRING_TO_ENUM(VG_LITE_INDEX_8);
+
+    printf(VG_LITE_PREFIX "Unknown blend format: %s\n", str);
+    return VG_LITE_BGRA8888;
+}
+
+static int parse_buffer_args(vg_lite_buffer_t* buffer, const char* str)
 {
     return 0;
 }
+
+static int parse_matrix_args(vg_lite_matrix_t* matrix, const char* str)
+{
+    return 0;
+}
+
+static int parse_rect_args(vg_lite_rectangle_t* rect, const char* str)
+{
+    return 0;
+}
+
+static vg_lite_color_t parse_color_args(const char* str)
+{
+    return 0;
+}
+
+static int parse_path_args(vg_lite_path_t* path, const char* str)
+{
+    return 0;
+}
+
+static int parse_path_bounding_box_args(vg_lite_path_t* path, const char* str)
+{
+    return 0;
+}
+
+static vg_lite_blend_t parse_blend_args(const char* str)
+{
+    STRING_TO_ENUM(VG_LITE_BLEND_NONE); /*! S, No blend, Non-premultiplied */
+    STRING_TO_ENUM(VG_LITE_BLEND_SRC_OVER); /*! S + (1 - Sa) * D , Non-premultiplied */
+    STRING_TO_ENUM(VG_LITE_BLEND_DST_OVER); /*! (1 - Da) * S + D , Non-premultiplied */
+    STRING_TO_ENUM(VG_LITE_BLEND_SRC_IN); /*! Da * S , Non-premultiplied */
+    STRING_TO_ENUM(VG_LITE_BLEND_DST_IN); /*! Sa * D , Non-premultiplied */
+    STRING_TO_ENUM(VG_LITE_BLEND_MULTIPLY); /*! S * (1 - Da) + D * (1 - Sa) + S * D , Non-premultiplied */
+    STRING_TO_ENUM(VG_LITE_BLEND_SCREEN); /*! S + D - S * D , Non-premultiplied */
+    STRING_TO_ENUM(VG_LITE_BLEND_DARKEN); /*! min(SrcOver, DstOver) , Non-premultiplied */
+    STRING_TO_ENUM(VG_LITE_BLEND_LIGHTEN); /*! max(SrcOver, DstOver) , Non-premultiplied */
+    STRING_TO_ENUM(VG_LITE_BLEND_ADDITIVE); /*! S + D , Non-premultiplied */
+    STRING_TO_ENUM(VG_LITE_BLEND_SUBTRACT); /*! D * (1 - Sa) , Non-premultiplied */
+    STRING_TO_ENUM(VG_LITE_BLEND_SUBTRACT_LVGL); /*! D - S , Non-premultiplied */
+    STRING_TO_ENUM(VG_LITE_BLEND_NORMAL_LVGL); /*! S * Sa + (1 - Sa) * D , Non-premultiplied */
+    STRING_TO_ENUM(VG_LITE_BLEND_ADDITIVE_LVGL); /*! (S + D) * Sa + D * (1 - Sa) , Non-premultiplied */
+    STRING_TO_ENUM(VG_LITE_BLEND_MULTIPLY_LVGL); /*! (S * D) * Sa + D * (1 - Sa) , Non-premultiplied */
+    STRING_TO_ENUM(VG_LITE_BLEND_PREMULTIPLY_SRC_OVER); /*! S * Sa + (1 - Sa) * D , Non-premultiplied */
+
+    printf(VG_LITE_PREFIX "Unknown blend mode: %s\n", str);
+    return VG_LITE_BLEND_NONE;
+}
+
+static vg_lite_fill_t parse_fill_rule_args(const char* str)
+{
+    STRING_TO_ENUM(VG_LITE_FILL_EVEN_ODD);
+    STRING_TO_ENUM(VG_LITE_FILL_NON_ZERO);
+
+    printf(VG_LITE_PREFIX "Unknown fill rule: %s\n", str);
+    return VG_LITE_FILL_EVEN_ODD;
+}
+
+static vg_lite_filter_t parse_filter_args(const char* str)
+{
+    STRING_TO_ENUM(VG_LITE_FILTER_POINT); /*! Fetch the nearest image pixel. */
+    STRING_TO_ENUM(VG_LITE_FILTER_LINEAR); /*! Used for linear paint. */
+    STRING_TO_ENUM(VG_LITE_FILTER_BI_LINEAR); /*! Use a 2x2 box around the image pixel and perform an interpolation. */
+    STRING_TO_ENUM(VG_LITE_FILTER_GAUSSIAN); /*! Perform 3x3 gaussian blur with the convolution for image pixel. */
+
+    printf(VG_LITE_PREFIX "Unknown filter: %s\n", str);
+    return VG_LITE_FILTER_POINT;
+}
+
+static vg_lite_pattern_mode_t parse_pattern_mode_args(const char* str)
+{
+    STRING_TO_ENUM(VG_LITE_PATTERN_COLOR); /*! Pixel outside the bounds of sourceimage should be taken as the color */
+    STRING_TO_ENUM(VG_LITE_PATTERN_PAD); /*! Pixel outside the bounds of sourceimage should be taken as having the same color as the closest edge pixel */
+    STRING_TO_ENUM(VG_LITE_PATTERN_REPEAT); /*! Pixel outside the bounds of sourceimage should be repeated indefinitely in all directions */
+    STRING_TO_ENUM(VG_LITE_PATTERN_REFLECT);
+
+    printf(VG_LITE_PREFIX "Unknown pattern mode: %s\n", str);
+    return VG_LITE_PATTERN_COLOR;
+}
+
+static int parse_long_commandline(int longindex, vg_lite_context_t* context)
+{
+    int retval = 0;
+    switch (longindex) {
+    case 0:
+        context->func_name = optarg;
+        break;
+
+    case 1:
+        retval = parse_buffer_args(&context->target, optarg);
+        break;
+
+    case 2:
+        retval = parse_buffer_args(&context->source, optarg);
+        break;
+
+    case 3:
+        retval = parse_matrix_args(&context->matrix, optarg);
+        break;
+
+    case 4:
+        retval = parse_matrix_args(&context->pattern_matrix, optarg);
+        break;
+
+    case 5:
+        retval = parse_rect_args(&context->rect, optarg);
+        break;
+
+    case 6:
+        retval = parse_path_args(&context->path, optarg);
+        break;
+
+    case 7:
+        retval = parse_path_bounding_box_args(&context->path, optarg);
+        break;
+
+    case 8:
+        context->blend = parse_blend_args(optarg);
+        break;
+
+    case 9:
+        context->fill_rule = parse_fill_rule_args(optarg);
+        break;
+
+    case 10:
+        context->filter = parse_filter_args(optarg);
+        break;
+
+    case 11:
+        context->pattern_mode = parse_pattern_mode_args(optarg);
+        break;
+
+    case 12:
+        context->color = parse_color_args(optarg);
+        break;
+
+    case 13:
+        context->pattern_color = parse_color_args(optarg);
+        break;
+
+    default:
+        printf(VG_LITE_PREFIX "Unknown longindex: %d\n", longindex);
+        return -1;
+    }
+
+    return retval;
+}
+
+static int parse_commandline(int argc, char** argv, vg_lite_context_t* context)
+{
+    memset(context, 0, sizeof(vg_lite_context_t));
+    vg_lite_identity(&context->matrix);
+    vg_lite_identity(&context->pattern_matrix);
+
+    const char* shortopt = "h:";
+
+    int ch;
+    int longindex = 0;
+    static const struct option longopts[] = {
+        { "func", required_argument, NULL, 0 },
+        { "target", required_argument, NULL, 0 },
+        { "source", required_argument, NULL, 0 },
+        { "matrix", required_argument, NULL, 0 },
+        { "pattern-matrix", required_argument, NULL, 0 },
+        { "rect", required_argument, NULL, 0 },
+        { "path", required_argument, NULL, 0 },
+        { "path-bounding-box", required_argument, NULL, 0 },
+        { "blend", required_argument, NULL, 0 },
+        { "fill-rule", required_argument, NULL, 0 },
+        { "filter", required_argument, NULL, 0 },
+        { "pattern-mode", required_argument, NULL, 0 },
+        { "color", required_argument, NULL, 0 },
+        { "pattern-color", required_argument, NULL, 0 },
+        { 0, 0, NULL, 0 }
+    };
+
+    while ((ch = getopt_long(argc, argv, shortopt, longopts, &longindex)) >= 0) {
+        switch (ch) {
+        case 0:
+            if (parse_long_commandline(longindex, context) < 0) {
+                return -1;
+            }
+            break;
+
+        case 'h':
+            show_usage(argv[0]);
+            return -1;
+
+        default:
+            printf(VG_LITE_PREFIX "Unknown option: %c", optopt);
+            show_usage(argv[0]);
+            return -1;
+        }
+    }
+
+    if (!context->func_name) {
+        printf(VG_LITE_PREFIX "Missing function name\n");
+        show_usage(argv[0]);
+        return -1;
+    }
+
+    return 0;
+}
+
+#endif /* LV_USE_VG_LITE_MAIN */
