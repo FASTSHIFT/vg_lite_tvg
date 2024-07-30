@@ -363,7 +363,7 @@ static vg_lite_buffer_format_t parse_buffer_format_args(const char* str)
     STRING_TO_ENUM(VG_LITE_INDEX_4);
     STRING_TO_ENUM(VG_LITE_INDEX_8);
 
-    printf(VG_LITE_PREFIX "Unknown blend format: %s\n", str);
+    printf(VG_LITE_PREFIX "Unknown buffer format: %s\n", str);
     return VG_LITE_BGRA8888;
 }
 
