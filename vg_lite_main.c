@@ -154,7 +154,7 @@ static void vg_lite_context_init(vg_lite_context_t* context)
 {
     memset(context, 0, sizeof(vg_lite_context_t));
     context->output_path = "target.png";
-    context->func_name = "vg_lite_blit_rect";
+    context->func_name = "vg_lite_draw_custom";
     context->target.format = VG_LITE_BGRA8888;
     context->target.width = 480;
     context->target.height = 480;
