@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(Simulator)
+project(vg_lite)
 
 # C/C++ version
 set(CMAKE_C_STANDARD 99)
@@ -27,7 +27,7 @@ endif()
 if (WIN32)
         message(STATUS "Platform: windows")
         add_definitions(-DUSE_WIN32DRV=1)
-        set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Simulator)
+        set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT vg_lite)
 elseif (UNIX)
         message(STATUS "Platform: UNIX")
 
@@ -115,18 +115,18 @@ include_directories(${PNG_INCLUDE_DIR})
 
 # Executable
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
-add_executable(Simulator ${SOURCES} ${INCLUDES})
+add_executable(vg_lite ${SOURCES} ${INCLUDES})
 
 # Link
 target_link_libraries(
-        Simulator PRIVATE
+        vg_lite PRIVATE
         stdc++
         m
         ${PNG_LIBRARIES}
 )
 
 set_target_properties(
-        Simulator
+        vg_lite
         PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/build"
 )
