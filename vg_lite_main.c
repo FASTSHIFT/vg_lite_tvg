@@ -283,6 +283,7 @@ static void show_usage(const char* progname)
            " --color <hex-value>"
            " --pattern-color <hex-value>"
            " --source-color <hex-value>\n"
+           " --scissor <string>"
            "\n",
         progname);
 
@@ -303,6 +304,7 @@ static void show_usage(const char* progname)
     printf("  --color <hex-value> Color in the format of 'AABBGGRR'.\n");
     printf("  --pattern-color <hex-value> Pattern Color in the format of 'AABBGGRR'.\n");
     printf("  --source-color <hex-value> Source color in the format of 'AABBGGRR'.\n");
+    printf("  --scissor <string> Scissor area arguments in the format of 'x,y,right,bottom' (e.g. '0,0,100,100').\n");
 }
 
 static vg_lite_buffer_format_t parse_buffer_format_args(const char* str)
@@ -488,6 +490,27 @@ static vg_lite_pattern_mode_t parse_pattern_mode_args(const char* str)
     return VG_LITE_PATTERN_COLOR;
 }
 
+static int parse_scissor_args(const char* str)
+{
+    if (!vg_lite_query_feature(gcFEATURE_BIT_VG_SCISSOR)) {
+        printf(VG_LITE_PREFIX "Scissor is not supported\n");
+        return -1;
+    }
+
+    int x, y, right, bottom;
+    int num = sscanf(str, "%d,%d,%d,%d", &x, &y, &right, &bottom);
+    if (num != 4) {
+        printf(VG_LITE_PREFIX "Invalid scissor arguments: %s\n", str);
+    }
+
+    VG_LITE_CHECK_ERROR(vg_lite_set_scissor(x, y, right, bottom));
+
+    return 0;
+
+error_handler:
+    return -1;
+}
+
 static int parse_long_commandline(int longindex, const struct option* longopts, vg_lite_context_t* context)
 {
     int retval = 0;
@@ -549,6 +572,10 @@ static int parse_long_commandline(int longindex, const struct option* longopts, 
         context->source_color = parse_color_args(optarg);
         break;
 
+    case 14:
+        retval = parse_scissor_args(optarg);
+        break;
+
     default:
         printf(VG_LITE_PREFIX "Unknown longindex: %d\n", longindex);
         return -1;
@@ -578,6 +605,7 @@ static int parse_commandline(int argc, char** argv, vg_lite_context_t* context)
         { "color", required_argument, NULL, 0 },
         { "pattern-color", required_argument, NULL, 0 },
         { "source-color", required_argument, NULL, 0 },
+        { "scissor", required_argument, NULL, 0 },
         { 0, 0, NULL, 0 }
     };
 
