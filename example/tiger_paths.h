@@ -3729,7 +3729,7 @@ static const vg_lite_path_t tiger_paths[240] = {
     { { -80, -40, 80, 90 }, VG_LITE_HIGH, VG_LITE_S8, { 0 }, sizeof(path_data239), path_data239, 1 },
 };
 
-const uint32_t tiger_color_data[] = {
+static const uint32_t tiger_color_data[] = {
     0xffffffff,
     0xffffffff,
     0xffffffff,
