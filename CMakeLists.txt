@@ -68,6 +68,7 @@ include_directories(
 file(GLOB VG_LITE_SOURCES
         ${PROJECT_SOURCE_DIR}/*.c
         ${PROJECT_SOURCE_DIR}/*.cpp
+        ${PROJECT_SOURCE_DIR}/example/*.c
         )
 
 ## thorvg
