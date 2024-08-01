@@ -4,6 +4,31 @@
 #
 
 menuconfig GRAPHICS_VG_LITE_TVG
-	bool "VG-Lite Simulator"
-	depends on LIB_THORVG
+	bool "VG-Lite Simulator & Example"
+	select LIB_PNG
 	default n
+
+if GRAPHICS_VG_LITE_TVG
+
+config VG_LITE_EXAMPLE_PRIORITY
+	int "VG-Lite Example task priority"
+	default 100
+
+config VG_LITE_EXAMPLE_STACKSIZE
+	int "VG-Lite Example stack size"
+	default 32768
+
+config VG_LITE_EXAMPLE_INCLUDE
+	string "VG-Lite header include path"
+	default ""
+
+config VG_LITE_EXAMPLE_CUSTOM_INIT
+	bool "VG-Lite custom init function"
+	default y
+
+config VG_LITE_SIM
+	bool "VG-Lite Simulator"
+	select LIB_THORVG
+	default y
+
+endif # GRAPHICS_VG_LITE_TVG

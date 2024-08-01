@@ -22,15 +22,52 @@ include $(APPDIR)/Make.defs
 
 CXXEXT   := .cpp
 
+CFLAGS   += ${INCDIR_PREFIX}$(APPDIR)/external/libpng
+CFLAGS   += ${INCDIR_PREFIX}$(APPDIR)/external/libpng/libpng
+
+ifneq ($(CONFIG_LIBYUV),)
+CFLAGS   += ${INCDIR_PREFIX}$(APPDIR)/graphics/libyuv/libyuv/include
+CXXFLAGS += ${INCDIR_PREFIX}$(APPDIR)/graphics/libyuv/libyuv/include
+
+CFLAGS   += -DLV_VG_LITE_THORVG_YUV_SUPPORT=1
+CXXFLAGS += -DLV_VG_LITE_THORVG_YUV_SUPPORT=1
+endif
+
+ifneq ($(CONFIG_VG_LITE_EXAMPLE_INCLUDE), "")
+CFLAGS   += ${INCDIR_PREFIX}$(APPDIR)/../$(CONFIG_VG_LITE_EXAMPLE_INCLUDE)
+else
+CFLAGS   += ${INCDIR_PREFIX}$(APPDIR)/graphics/vg_lite_tvg
+endif
+
+ifneq ($(CONFIG_VG_LITE_EXAMPLE_CUSTOM_INIT),)
+CFLAGS   += -DLV_VG_LITE_USE_GPU_INIT=1
+
+ifneq ($(CONFIG_ARCH_SIM),)
+# simulators need re-initialization before rendering
+CFLAGS   += -DLV_VG_LITE_USE_GPU_INIT_ONCE=0
+endif
+
+endif
+
+ifneq ($(CONFIG_VG_LITE_SIM),)
 CFLAGS   += ${INCDIR_PREFIX}$(APPDIR)/external/thorvg/thorvg/inc
-CFLAGS   += ${INCDIR_PREFIX}$(APPDIR)/apps/graphics/libyuv/libyuv/include
 CXXFLAGS += ${INCDIR_PREFIX}$(APPDIR)/external/thorvg/thorvg/inc
-CXXFLAGS += ${INCDIR_PREFIX}$(APPDIR)/apps/graphics/libyuv/libyuv/include
 
-CSRCS   += $(wildcard *.c)
-CXXSRCS += $(wildcard *.cpp)
+CFLAGS   += -DLV_VG_LITE_THORVG_USE_RELEASE=1
+CXXFLAGS += -DLV_VG_LITE_THORVG_USE_RELEASE=1
 
-CFLAGS   += -DLV_USE_VG_LITE_MAIN=0 -DLV_VG_LITE_THORVG_USE_RELEASE=1
-CXXFLAGS += -DLV_USE_VG_LITE_MAIN=0 -DLV_VG_LITE_THORVG_USE_RELEASE=1
+CSRCS    += $(wildcard *.c)
+CXXSRCS  += $(wildcard *.cpp)
+endif
+
+CFLAGS   += -DLV_USE_VG_LITE_MAIN=1
+CXXFLAGS += -DLV_USE_VG_LITE_MAIN=1
+
+PROGNAME = vg_lite
+PRIORITY = $(CONFIG_VG_LITE_EXAMPLE_PRIORITY)
+STACKSIZE = $(CONFIG_VG_LITE_EXAMPLE_STACKSIZE)
+MODULE = $(CONFIG_GRAPHICS_VG_LITE_TVG)
+
+MAINSRC = example/vg_lite_main.c
 
 include $(APPDIR)/Application.mk

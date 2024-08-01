@@ -115,20 +115,24 @@ static int save_buffer(const char* filename, const vg_lite_buffer_t* buffer);
 int main(int argc, char** argv)
 {
 #if LV_VG_LITE_USE_GPU_INIT
+#if LV_VG_LITE_USE_GPU_INIT_ONCE
     static bool is_initialized = false;
     if (!is_initialized) {
+#endif
         /* Initialize the GPU */
         extern void gpu_init(void);
         gpu_init();
+#if LV_VG_LITE_USE_GPU_INIT_ONCE
         is_initialized = true;
     }
+#endif
 #endif
 
     vg_lite_context_t context;
     vg_lite_context_init(&context);
 
     if (parse_commandline(argc, argv, &context) < 0) {
-        return EXIT_FAILURE;
+        goto error_handler;
     }
 
     /* Create a target buffer */
@@ -141,6 +145,13 @@ int main(int argc, char** argv)
 
 error_handler:
     vg_lite_context_deinit(&context);
+
+#if LV_VG_LITE_USE_GPU_INIT && !LV_VG_LITE_USE_GPU_INIT_ONCE
+    /* Deinitialize the GPU */
+    extern void gpu_deinit(void);
+    gpu_deinit();
+#endif
+
     return 0;
 }
 

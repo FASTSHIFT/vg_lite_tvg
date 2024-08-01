@@ -5,14 +5,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define LV_USE_VG_LITE_THORVG 1
+
 #define LV_USE_DRAW_VG_LITE 1
 
 /* Enable VG-Lite custom external 'gpu_init()' function */
 #ifndef LV_VG_LITE_USE_GPU_INIT
 #define LV_VG_LITE_USE_GPU_INIT 1
+
+#ifndef LV_VG_LITE_USE_GPU_INIT_ONCE
+#define LV_VG_LITE_USE_GPU_INIT_ONCE 1
 #endif
 
-#define LV_USE_VG_LITE_THORVG 1
+#endif
 
 #ifndef LV_USE_VG_LITE_MAIN
 #define LV_USE_VG_LITE_MAIN 1
@@ -45,7 +50,9 @@ static inline void* lv_malloc_zeroed(size_t size)
 #define LV_VG_LITE_THORVG_LVGL_BLEND_SUPPORT 0
 
 /*Enable YUV color format support*/
+#ifndef LV_VG_LITE_THORVG_YUV_SUPPORT
 #define LV_VG_LITE_THORVG_YUV_SUPPORT 0
+#endif
 
 /*Enable Linear gradient extension support*/
 #define LV_VG_LITE_THORVG_LINEAR_GRADIENT_EXT_SUPPORT 0
