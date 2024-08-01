@@ -47,13 +47,14 @@
 
 #define VG_LITE_IS_ERROR(err) ((err) != VG_LITE_SUCCESS)
 
-#define VG_LITE_CHECK_ERROR(func)                                                      \
-    do {                                                                               \
-        vg_lite_error_t error_code = func;                                             \
-        if (VG_LITE_IS_ERROR(error_code)) {                                            \
-            printf(VG_LITE_PREFIX "Execute '" #func "' error: %d\n", (int)error_code); \
-            goto error_handler;                                                        \
-        }                                                                              \
+#define VG_LITE_CHECK_ERROR(func)                                        \
+    do {                                                                 \
+        vg_lite_error_t error_code = func;                               \
+        if (VG_LITE_IS_ERROR(error_code)) {                              \
+            printf(VG_LITE_PREFIX "Execute '" #func "' error: %d(%s)\n", \
+                (int)error_code, vg_lite_error_string(error_code));      \
+            goto error_handler;                                          \
+        }                                                                \
     } while (0)
 
 #define STRING_TO_ENUM(e)          \
@@ -61,6 +62,10 @@
         if (IS_STR_EQUAL(str, #e)) \
             return e;              \
     } while (0)
+
+#define ENUM_TO_STRING(e) \
+    case (e):             \
+        return #e
 
 /**********************
  *      TYPEDEFS
@@ -98,6 +103,7 @@ static void vg_lite_context_init(vg_lite_context_t* context);
 static void vg_lite_context_deinit(vg_lite_context_t* context);
 static void vg_lite_run_test(vg_lite_context_t* context);
 static int parse_commandline(int argc, char** argv, vg_lite_context_t* context);
+static const char* vg_lite_error_string(vg_lite_error_t error);
 static int save_buffer(const char* filename, const vg_lite_buffer_t* buffer);
 
 /**********************
@@ -316,6 +322,27 @@ static void show_usage(const char* progname)
     printf("  --pattern-color <hex-value> Pattern Color in the format of 'AABBGGRR'.\n");
     printf("  --source-color <hex-value> Source color in the format of 'AABBGGRR'.\n");
     printf("  --scissor <string> Scissor area arguments in the format of 'x,y,right,bottom' (e.g. '0,0,100,100').\n");
+}
+
+static const char* vg_lite_error_string(vg_lite_error_t error)
+{
+    switch (error) {
+        ENUM_TO_STRING(VG_LITE_SUCCESS);
+        ENUM_TO_STRING(VG_LITE_INVALID_ARGUMENT);
+        ENUM_TO_STRING(VG_LITE_OUT_OF_MEMORY);
+        ENUM_TO_STRING(VG_LITE_NO_CONTEXT);
+        ENUM_TO_STRING(VG_LITE_TIMEOUT);
+        ENUM_TO_STRING(VG_LITE_OUT_OF_RESOURCES);
+        ENUM_TO_STRING(VG_LITE_GENERIC_IO);
+        ENUM_TO_STRING(VG_LITE_NOT_SUPPORT);
+        ENUM_TO_STRING(VG_LITE_ALREADY_EXISTS);
+        ENUM_TO_STRING(VG_LITE_NOT_ALIGNED);
+        ENUM_TO_STRING(VG_LITE_FLEXA_TIME_OUT);
+        ENUM_TO_STRING(VG_LITE_FLEXA_HANDSHAKE_FAIL);
+    default:
+        break;
+    }
+    return "UNKNOW_ERROR";
 }
 
 static vg_lite_buffer_format_t parse_buffer_format_args(const char* str)
