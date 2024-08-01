@@ -132,6 +132,7 @@ class vg_lite_ctx
         void * target_buffer;
         vg_lite_uint32_t target_px_size;
         vg_lite_buffer_format_t target_format;
+        static vg_lite_ctx * g_context;
 
     public:
         vg_lite_ctx()
@@ -212,8 +213,7 @@ class vg_lite_ctx
 
         static vg_lite_ctx * get_instance()
         {
-            static vg_lite_ctx instance;
-            return &instance;
+            return g_context;
         }
 
     private:
@@ -226,6 +226,8 @@ class vg_lite_ctx
         vg_lite_uint32_t clut_16colors[16];
         vg_lite_uint32_t clut_256colors[256];
 };
+
+vg_lite_ctx * vg_lite_ctx::g_context = nullptr;
 
 template <typename DEST_TYPE, typename SRC_TYPE>
 class vg_lite_converter
@@ -446,7 +448,17 @@ extern "C" {
 
     void gpu_init(void)
     {
+        LV_ASSERT(vg_lite_ctx::g_context == nullptr);
         vg_lite_init(0, 0);
+        vg_lite_ctx::g_context = new vg_lite_ctx;
+    }
+
+    void gpu_deinit(void)
+    {
+        LV_ASSERT_NULL(vg_lite_ctx::g_context);
+        delete vg_lite_ctx::g_context;
+        vg_lite_ctx::g_context = nullptr;
+        vg_lite_close();
     }
 
     vg_lite_error_t vg_lite_allocate(vg_lite_buffer_t * buffer)
