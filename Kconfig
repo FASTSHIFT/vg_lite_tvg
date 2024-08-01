@@ -5,7 +5,7 @@
 
 menuconfig GRAPHICS_VG_LITE_TVG
 	bool "VG-Lite Simulator & Example"
-	select LIB_PNG
+	depends on LIB_PNG
 	default n
 
 if GRAPHICS_VG_LITE_TVG
@@ -28,7 +28,7 @@ config VG_LITE_EXAMPLE_CUSTOM_INIT
 
 config VG_LITE_SIM
 	bool "VG-Lite Simulator"
-	select LIB_THORVG
+	depends on LIB_THORVG
 	default y
 
 endif # GRAPHICS_VG_LITE_TVG
