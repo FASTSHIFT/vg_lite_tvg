@@ -25,7 +25,7 @@
  *      INCLUDES
  *********************/
 
-#include "vg_lite_def.h"
+#include "../vg_lite_def.h"
 
 #if LV_USE_VG_LITE_MAIN
 

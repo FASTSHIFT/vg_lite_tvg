@@ -45,6 +45,8 @@ CFLAGS   += -DLV_VG_LITE_USE_GPU_INIT=1
 ifneq ($(CONFIG_ARCH_SIM),)
 # simulators need re-initialization before rendering
 CFLAGS   += -DLV_VG_LITE_USE_GPU_INIT_ONCE=0
+else
+CFLAGS   += -DLV_VG_LITE_USE_GPU_INIT_ONCE=1
 endif
 
 endif
