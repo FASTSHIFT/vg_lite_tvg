@@ -205,6 +205,7 @@ static void vg_lite_context_init(vg_lite_context_t* context)
     context->blend = VG_LITE_BLEND_SRC_OVER;
     context->fill_rule = VG_LITE_FILL_EVEN_ODD;
     context->filter = VG_LITE_FILTER_BI_LINEAR;
+    context->pattern_mode = VG_LITE_PATTERN_COLOR;
 
     vg_lite_init_path(
         &context->path,
