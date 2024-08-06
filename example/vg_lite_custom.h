@@ -1,5 +1,7 @@
 #include "tiger_paths.h"
 
+#define CUSTOM_PATH_BOUNDING_BOX 0, 0, 100, 100
+
 /* Custom path data */
 static const int16_t custom_path_data[] = {
     VLC_OP_MOVE, 0, 0,

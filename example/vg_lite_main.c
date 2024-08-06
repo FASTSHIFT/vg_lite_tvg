@@ -213,7 +213,7 @@ static void vg_lite_context_init(vg_lite_context_t* context)
         VG_LITE_HIGH,
         sizeof(custom_path_data),
         (void*)custom_path_data,
-        0, 0, 100, 100);
+        CUSTOM_PATH_BOUNDING_BOX);
 }
 
 static void vg_lite_context_deinit(vg_lite_context_t* context)
