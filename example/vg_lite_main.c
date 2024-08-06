@@ -195,7 +195,9 @@ static void vg_lite_context_init(vg_lite_context_t* context)
     context->source.format = VG_LITE_BGRA8888;
     context->source.width = 240;
     context->source.height = 240;
-    context->source_color = 0xFFFF0000;
+    context->color = 0xFFFF0000;
+    context->pattern_color = 0xFF00FF00;
+    context->source_color = 0xFF0000FF;
     vg_lite_identity(&context->matrix);
     vg_lite_identity(&context->pattern_matrix);
     context->rect.x = 0;
