@@ -34,8 +34,20 @@
 #include <png.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+
+/* for aligned_alloc */
+#ifndef __USE_ISOC11
+    #define __USE_ISOC11
+#endif
+#include <stdlib.h>
+
+#ifdef CACHE_API_H
+#include CACHE_API_H
+#else
+#define CACHE_FLUSH()
+#define CACHE_INVALIDATE()
+#endif /* CACHE_API_H */
 
 /*********************
  *      DEFINES
@@ -56,6 +68,9 @@
             goto error_handler;                                          \
         }                                                                \
     } while (0)
+
+#define VG_LITE_ALIGN(number, align_bytes) \
+    (((number) + ((align_bytes) - 1)) & ~((align_bytes) - 1))
 
 #define STRING_TO_ENUM(e)          \
     do {                           \
@@ -105,6 +120,8 @@ static void vg_lite_run_test(vg_lite_context_t* context);
 static int parse_commandline(int argc, char** argv, vg_lite_context_t* context);
 static const char* vg_lite_error_string(vg_lite_error_t error);
 static int save_buffer(const char* filename, const vg_lite_buffer_t* buffer);
+static vg_lite_error_t alloc_buffer(vg_lite_buffer_t* buffer);
+static vg_lite_error_t free_buffer(vg_lite_buffer_t* buffer);
 
 /**********************
  *  STATIC VARIABLES
@@ -142,8 +159,8 @@ int main(int argc, char** argv)
     }
 
     /* Create a target buffer */
-    VG_LITE_CHECK_ERROR(vg_lite_allocate(&context.target));
-    VG_LITE_CHECK_ERROR(vg_lite_allocate(&context.source));
+    VG_LITE_CHECK_ERROR(alloc_buffer(&context.target));
+    VG_LITE_CHECK_ERROR(alloc_buffer(&context.source));
 
     vg_lite_run_test(&context);
 
@@ -201,13 +218,11 @@ static void vg_lite_context_init(vg_lite_context_t* context)
 static void vg_lite_context_deinit(vg_lite_context_t* context)
 {
     if (context->target.memory) {
-        vg_lite_free(&context->target);
-        memset(&context->target, 0, sizeof(vg_lite_buffer_t));
+        free_buffer(&context->target);
     }
 
     if (context->source.memory) {
-        vg_lite_free(&context->source);
-        memset(&context->source, 0, sizeof(vg_lite_buffer_t));
+        free_buffer(&context->source);
     }
 }
 
@@ -713,6 +728,9 @@ static int save_buffer(const char* filename, const vg_lite_buffer_t* buffer)
         return -1;
     }
 
+    /* Invlidate the cache to ensure the memory is updated. */
+    CACHE_INVALIDATE();
+
     /* Write the PNG image. */
     int success = png_image_write_to_file(&image, filename, 0, buffer->memory, buffer->stride, NULL);
     if (!success) {
@@ -720,6 +738,204 @@ static int save_buffer(const char* filename, const vg_lite_buffer_t* buffer)
     }
 
     return success;
+}
+
+static void get_format_bytes(
+    vg_lite_buffer_format_t format,
+    vg_lite_uint32_t* mul,
+    vg_lite_uint32_t* div,
+    vg_lite_uint32_t* bytes_align)
+{
+    *mul = *div = 1;
+    *bytes_align = 4;
+    switch (format) {
+    case VG_LITE_L8:
+    case VG_LITE_A8:
+    case VG_LITE_RGBA8888_ETC2_EAC:
+        break;
+
+    case VG_LITE_A4:
+        *div = 2;
+        break;
+
+    case VG_LITE_ABGR1555:
+    case VG_LITE_ARGB1555:
+    case VG_LITE_BGRA5551:
+    case VG_LITE_RGBA5551:
+    case VG_LITE_RGBA4444:
+    case VG_LITE_BGRA4444:
+    case VG_LITE_ABGR4444:
+    case VG_LITE_ARGB4444:
+    case VG_LITE_RGB565:
+    case VG_LITE_BGR565:
+    case VG_LITE_YUYV:
+    case VG_LITE_YUY2:
+    case VG_LITE_YUY2_TILED:
+    /* AYUY2 buffer memory = YUY2 + alpha. */
+    case VG_LITE_AYUY2:
+    case VG_LITE_AYUY2_TILED:
+    /* ABGR8565_PLANAR buffer memory = RGB565 + alpha. */
+    case VG_LITE_ABGR8565_PLANAR:
+    case VG_LITE_ARGB8565_PLANAR:
+    case VG_LITE_RGBA5658_PLANAR:
+    case VG_LITE_BGRA5658_PLANAR:
+        *mul = 2;
+        break;
+
+    case VG_LITE_RGBA8888:
+    case VG_LITE_BGRA8888:
+    case VG_LITE_ABGR8888:
+    case VG_LITE_ARGB8888:
+    case VG_LITE_RGBX8888:
+    case VG_LITE_BGRX8888:
+    case VG_LITE_XBGR8888:
+    case VG_LITE_XRGB8888:
+        *mul = 4;
+        break;
+
+    case VG_LITE_NV12:
+    case VG_LITE_NV12_TILED:
+        *mul = 3;
+        break;
+
+    case VG_LITE_ANV12:
+    case VG_LITE_ANV12_TILED:
+        *mul = 4;
+        break;
+
+    case VG_LITE_INDEX_1:
+        *div = 8;
+        *bytes_align = 8;
+        break;
+
+    case VG_LITE_INDEX_2:
+        *div = 4;
+        *bytes_align = 8;
+        break;
+
+    case VG_LITE_INDEX_4:
+        *div = 2;
+        *bytes_align = 8;
+        break;
+
+    case VG_LITE_INDEX_8:
+        *bytes_align = 1;
+        break;
+
+    case VG_LITE_RGBA2222:
+    case VG_LITE_BGRA2222:
+    case VG_LITE_ABGR2222:
+    case VG_LITE_ARGB2222:
+        *mul = 1;
+        break;
+
+    case VG_LITE_RGB888:
+    case VG_LITE_BGR888:
+    case VG_LITE_ABGR8565:
+    case VG_LITE_BGRA5658:
+    case VG_LITE_ARGB8565:
+    case VG_LITE_RGBA5658:
+        *mul = 3;
+        break;
+
+    /* OpenVG format*/
+    case VG_sRGBX_8888:
+    case VG_sRGBA_8888:
+    case VG_sRGBA_8888_PRE:
+    case VG_lRGBX_8888:
+    case VG_lRGBA_8888:
+    case VG_lRGBA_8888_PRE:
+    case VG_sXRGB_8888:
+    case VG_sARGB_8888:
+    case VG_sARGB_8888_PRE:
+    case VG_lXRGB_8888:
+    case VG_lARGB_8888:
+    case VG_lARGB_8888_PRE:
+    case VG_sBGRX_8888:
+    case VG_sBGRA_8888:
+    case VG_sBGRA_8888_PRE:
+    case VG_lBGRX_8888:
+    case VG_lBGRA_8888:
+    case VG_sXBGR_8888:
+    case VG_sABGR_8888:
+    case VG_lBGRA_8888_PRE:
+    case VG_sABGR_8888_PRE:
+    case VG_lXBGR_8888:
+    case VG_lABGR_8888:
+    case VG_lABGR_8888_PRE:
+        *mul = 4;
+        break;
+
+    case VG_sRGBA_5551:
+    case VG_sRGBA_4444:
+    case VG_sARGB_1555:
+    case VG_sARGB_4444:
+    case VG_sBGRA_5551:
+    case VG_sBGRA_4444:
+    case VG_sABGR_1555:
+    case VG_sABGR_4444:
+    case VG_sRGB_565:
+    case VG_sBGR_565:
+        *mul = 2;
+        break;
+
+    case VG_sL_8:
+    case VG_lL_8:
+    case VG_A_8:
+        break;
+
+    case VG_BW_1:
+    case VG_A_4:
+    case VG_A_1:
+        *div = 2;
+        break;
+
+    default:
+        break;
+    }
+}
+
+static vg_lite_error_t alloc_buffer(vg_lite_buffer_t* buffer)
+{
+    if (buffer->format == VG_LITE_RGBA8888_ETC2_EAC && (buffer->width % 16 || buffer->height % 4)) {
+        return VG_LITE_INVALID_ARGUMENT;
+    }
+
+    /* Reset planar. */
+    buffer->yuv.uv_planar = buffer->yuv.v_planar = buffer->yuv.alpha_planar = 0;
+
+    /* Align height in case format is tiled. */
+    if (buffer->format >= VG_LITE_YUY2 && buffer->format <= VG_LITE_NV16) {
+        buffer->height = VG_LITE_ALIGN(buffer->height, 4);
+        buffer->yuv.swizzle = VG_LITE_SWIZZLE_UV;
+    }
+
+    if (buffer->format >= VG_LITE_YUY2_TILED && buffer->format <= VG_LITE_AYUY2_TILED) {
+        buffer->height = VG_LITE_ALIGN(buffer->height, 4);
+        buffer->tiled = VG_LITE_TILED;
+        buffer->yuv.swizzle = VG_LITE_SWIZZLE_UV;
+    }
+
+    vg_lite_uint32_t mul, div, align;
+    get_format_bytes(buffer->format, &mul, &div, &align);
+    vg_lite_uint32_t stride = VG_LITE_ALIGN((buffer->width * mul / div), align);
+
+    buffer->stride = stride;
+    /* Size must be multiple of align, See: https://en.cppreference.com/w/c/memory/aligned_alloc */
+    size_t size = VG_LITE_ALIGN(buffer->height * stride, LV_VG_LITE_THORVG_BUF_ADDR_ALIGN);
+    buffer->memory = aligned_alloc(LV_VG_LITE_THORVG_BUF_ADDR_ALIGN, size);
+    LV_ASSERT(buffer->memory);
+    buffer->address = (vg_lite_uint32_t)(uintptr_t)buffer->memory;
+    buffer->handle = buffer->memory;
+    return VG_LITE_SUCCESS;
+}
+
+static vg_lite_error_t free_buffer(vg_lite_buffer_t* buffer)
+{
+    LV_ASSERT(buffer->memory);
+    free(buffer->memory);
+    memset(buffer, 0, sizeof(vg_lite_buffer_t));
+    return VG_LITE_SUCCESS;
 }
 
 #endif /* LV_USE_VG_LITE_MAIN */
