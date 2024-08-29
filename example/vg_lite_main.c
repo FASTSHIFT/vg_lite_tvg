@@ -841,58 +841,6 @@ static void get_format_bytes(
         *mul = 3;
         break;
 
-    /* OpenVG format*/
-    case VG_sRGBX_8888:
-    case VG_sRGBA_8888:
-    case VG_sRGBA_8888_PRE:
-    case VG_lRGBX_8888:
-    case VG_lRGBA_8888:
-    case VG_lRGBA_8888_PRE:
-    case VG_sXRGB_8888:
-    case VG_sARGB_8888:
-    case VG_sARGB_8888_PRE:
-    case VG_lXRGB_8888:
-    case VG_lARGB_8888:
-    case VG_lARGB_8888_PRE:
-    case VG_sBGRX_8888:
-    case VG_sBGRA_8888:
-    case VG_sBGRA_8888_PRE:
-    case VG_lBGRX_8888:
-    case VG_lBGRA_8888:
-    case VG_sXBGR_8888:
-    case VG_sABGR_8888:
-    case VG_lBGRA_8888_PRE:
-    case VG_sABGR_8888_PRE:
-    case VG_lXBGR_8888:
-    case VG_lABGR_8888:
-    case VG_lABGR_8888_PRE:
-        *mul = 4;
-        break;
-
-    case VG_sRGBA_5551:
-    case VG_sRGBA_4444:
-    case VG_sARGB_1555:
-    case VG_sARGB_4444:
-    case VG_sBGRA_5551:
-    case VG_sBGRA_4444:
-    case VG_sABGR_1555:
-    case VG_sABGR_4444:
-    case VG_sRGB_565:
-    case VG_sBGR_565:
-        *mul = 2;
-        break;
-
-    case VG_sL_8:
-    case VG_lL_8:
-    case VG_A_8:
-        break;
-
-    case VG_BW_1:
-    case VG_A_4:
-    case VG_A_1:
-        *div = 2;
-        break;
-
     default:
         break;
     }
