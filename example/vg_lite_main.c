@@ -144,6 +144,7 @@ int main(int argc, char** argv)
 #endif
         /* Initialize the GPU */
         extern void gpu_init(void);
+        printf(VG_LITE_PREFIX "Initializing GPU\n");
         gpu_init();
 #if LV_VG_LITE_USE_GPU_INIT_ONCE
         is_initialized = true;
@@ -172,8 +173,11 @@ error_handler:
 #if LV_VG_LITE_USE_GPU_INIT && !LV_VG_LITE_USE_GPU_INIT_ONCE
     /* Deinitialize the GPU */
     extern void gpu_deinit(void);
+    printf(VG_LITE_PREFIX "Deinitializing GPU\n");
     gpu_deinit();
 #endif
+
+    printf(VG_LITE_PREFIX "Finished\n");
 
     return 0;
 }
@@ -220,10 +224,12 @@ static void vg_lite_context_init(vg_lite_context_t* context)
 
 static void vg_lite_context_deinit(vg_lite_context_t* context)
 {
+    printf(VG_LITE_PREFIX "Free target memory: %p\n", context->target.memory);
     if (context->target.memory) {
         free_buffer(&context->target);
     }
 
+    printf(VG_LITE_PREFIX "Free source memory: %p\n", context->source.memory);
     if (context->source.memory) {
         free_buffer(&context->source);
     }
@@ -693,7 +699,7 @@ static int parse_commandline(int argc, char** argv, vg_lite_context_t* context)
 
 static int save_buffer(const char* filename, const vg_lite_buffer_t* buffer)
 {
-    printf(VG_LITE_PREFIX "Save buffer to %s\n", filename);
+    printf(VG_LITE_PREFIX "Save buffer to %s...\n", filename);
 
     /* Construct the PNG image structure. */
     png_image image;
@@ -734,9 +740,14 @@ static int save_buffer(const char* filename, const vg_lite_buffer_t* buffer)
     /* Invlidate the cache to ensure the memory is updated. */
     CACHE_INVALIDATE();
 
+    printf(VG_LITE_PREFIX "format: %d, width: %d, height: %d, memory: %p, stride: %d\n", 
+        buffer->format, buffer->width, buffer->height, buffer->memory, (int)buffer->stride);
+
     /* Write the PNG image. */
     int success = png_image_write_to_file(&image, filename, 0, buffer->memory, buffer->stride, NULL);
-    if (!success) {
+    if (success) {
+        printf(VG_LITE_PREFIX "Successfully saved image to %s\n", filename);
+    } else {
         printf(VG_LITE_PREFIX "Failed to save image\n");
     }
 
@@ -878,6 +889,8 @@ static vg_lite_error_t alloc_buffer(vg_lite_buffer_t* buffer)
     LV_ASSERT(buffer->memory);
     buffer->address = (vg_lite_uint32_t)(uintptr_t)buffer->memory;
     buffer->handle = buffer->memory;
+    printf(VG_LITE_PREFIX "Allocated buffer: format: %d, width: %d, height: %d, memory: %p, size: %zu, stride: %d\n",
+        buffer->format, buffer->width, buffer->height, buffer->memory, size, buffer->stride);
     return VG_LITE_SUCCESS;
 }
 
