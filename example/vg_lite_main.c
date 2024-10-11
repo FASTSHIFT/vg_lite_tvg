@@ -107,6 +107,7 @@ typedef struct
 
     vg_lite_color_t color;
     vg_lite_color_t pattern_color;
+    vg_lite_color_t target_color;
     vg_lite_color_t source_color;
 } vg_lite_context_t;
 
@@ -201,6 +202,7 @@ static void vg_lite_context_init(vg_lite_context_t* context)
     context->source.height = 240;
     context->color = 0xFFFF0000;
     context->pattern_color = 0xFF00FF00;
+    context->target_color = 0xFF000000;
     context->source_color = 0xFF0000FF;
     vg_lite_identity(&context->matrix);
     vg_lite_identity(&context->pattern_matrix);
@@ -243,7 +245,7 @@ static void vg_lite_run_test(vg_lite_context_t* context)
     VG_LITE_CHECK_ERROR(vg_lite_clear(
         &context->target,
         NULL,
-        0xFFFFFFFF));
+        context->target_color));
     VG_LITE_CHECK_ERROR(vg_lite_clear(
         &context->source,
         NULL,
@@ -631,10 +633,14 @@ static int parse_long_commandline(int longindex, const struct option* longopts, 
         break;
 
     case 13:
-        context->source_color = parse_color_args(optarg);
+        context->target_color = parse_color_args(optarg);
         break;
 
     case 14:
+        context->source_color = parse_color_args(optarg);
+        break;
+
+    case 15:
         retval = parse_scissor_args(optarg);
         break;
 
@@ -666,6 +672,7 @@ static int parse_commandline(int argc, char** argv, vg_lite_context_t* context)
         { "pattern-mode", required_argument, NULL, 0 },
         { "color", required_argument, NULL, 0 },
         { "pattern-color", required_argument, NULL, 0 },
+        { "target-color", required_argument, NULL, 0 },
         { "source-color", required_argument, NULL, 0 },
         { "scissor", required_argument, NULL, 0 },
         { 0, 0, NULL, 0 }
