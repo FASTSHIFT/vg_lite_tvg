@@ -62,10 +62,12 @@ CSRCS    += $(wildcard *.c)
 CXXSRCS  += $(wildcard *.cpp)
 endif
 
+ifneq ($(CONFIG_VG_LITE_EXAMPLE_ENABLE_NUTTX_DCACHE),)
 # Add cache flush/invalidate functions defined in nuttx/cache.h
 CFLAGS   += "-DCACHE_API_H=<nuttx/cache.h>"
 CFLAGS   += "-DCACHE_FLUSH=up_flush_dcache_all"
 CFLAGS   += "-DCACHE_INVALIDATE=up_invalidate_dcache_all"
+endif
 
 CFLAGS   += -DLV_USE_VG_LITE_MAIN=1
 CXXFLAGS += -DLV_USE_VG_LITE_MAIN=1

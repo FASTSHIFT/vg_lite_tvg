@@ -26,6 +26,10 @@ config VG_LITE_EXAMPLE_CUSTOM_INIT
 	bool "VG-Lite custom init function"
 	default y
 
+config VG_LITE_EXAMPLE_ENABLE_NUTTX_DCACHE
+	bool "Enable NuttX D-Cache API"
+	default n
+
 config VG_LITE_SIM
 	bool "VG-Lite Simulator"
 	depends on LIB_THORVG
