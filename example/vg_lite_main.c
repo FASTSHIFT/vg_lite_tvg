@@ -38,7 +38,7 @@
 
 /* for aligned_alloc */
 #ifndef __USE_ISOC11
-    #define __USE_ISOC11
+#define __USE_ISOC11
 #endif
 #include <stdlib.h>
 
@@ -120,7 +120,7 @@ static void vg_lite_context_deinit(vg_lite_context_t* context);
 static void vg_lite_run_test(vg_lite_context_t* context);
 static int parse_commandline(int argc, char** argv, vg_lite_context_t* context);
 static const char* vg_lite_error_string(vg_lite_error_t error);
-static int save_buffer(const char* filename, const vg_lite_buffer_t* buffer);
+static bool save_buffer(const char* filename, const vg_lite_buffer_t* buffer);
 static vg_lite_error_t alloc_buffer(vg_lite_buffer_t* buffer);
 static vg_lite_error_t free_buffer(vg_lite_buffer_t* buffer);
 
@@ -166,7 +166,9 @@ int main(int argc, char** argv)
 
     vg_lite_run_test(&context);
 
-    save_buffer(context.output_path, &context.target);
+    if (save_buffer(context.output_path, &context.target)) {
+        printf(VG_LITE_PREFIX "Save buffer to %s successfully\n", context.output_path);
+    }
 
 error_handler:
     vg_lite_context_deinit(&context);
@@ -332,7 +334,8 @@ static void show_usage(const char* progname)
 
     printf("\nWhere:\n");
     printf("  -h Show this help message.\n");
-    printf("  -o <string> Output file path.\n");
+    printf("  -o <string> Output file path. Use file extension to determine the output format. \n"
+           "              i.e. 'target.png' for PNG format(default). Others formats are save raw data.\n");
     printf("  --func <string> Test case function name.\n");
     printf("  --target <string> Target buffer arguments in the format of 'width,height,format'.\n");
     printf("  --source <string> Source buffer arguments in the format of 'width,height,format'.\n");
@@ -704,7 +707,21 @@ static int parse_commandline(int argc, char** argv, vg_lite_context_t* context)
     return 0;
 }
 
-static int save_buffer(const char* filename, const vg_lite_buffer_t* buffer)
+static const char* filename_get_ext(const char* fn)
+{
+    size_t i;
+    for (i = strlen(fn); i > 0; i--) {
+        if (fn[i] == '.') {
+            return &fn[i + 1];
+        } else if (fn[i] == '/' || fn[i] == '\\') {
+            return ""; /*No extension if a '\' or '/' found*/
+        }
+    }
+
+    return ""; /*Empty string if no '.' in the file name.*/
+}
+
+static bool save_buffer(const char* filename, const vg_lite_buffer_t* buffer)
 {
     printf(VG_LITE_PREFIX "Save buffer to %s...\n", filename);
 
@@ -741,24 +758,38 @@ static int save_buffer(const char* filename, const vg_lite_buffer_t* buffer)
         break;
     default:
         printf(VG_LITE_PREFIX "Unsupport format: %d\n", buffer->format);
-        return -1;
+        return false;
     }
 
     /* Invlidate the cache to ensure the memory is updated. */
     CACHE_INVALIDATE();
 
-    printf(VG_LITE_PREFIX "format: %d, width: %d, height: %d, memory: %p, stride: %d\n", 
+    printf(VG_LITE_PREFIX "format: %d, width: %d, height: %d, memory: %p, stride: %d\n",
         buffer->format, buffer->width, buffer->height, buffer->memory, (int)buffer->stride);
 
-    /* Write the PNG image. */
-    int success = png_image_write_to_file(&image, filename, 0, buffer->memory, buffer->stride, NULL);
-    if (success) {
-        printf(VG_LITE_PREFIX "Successfully saved image to %s\n", filename);
-    } else {
-        printf(VG_LITE_PREFIX "Failed to save image\n");
+    if (strcmp(filename_get_ext(filename), "png") == 0) {
+        /* Write the PNG image. */
+        int success = png_image_write_to_file(&image, filename, 0, buffer->memory, buffer->stride, NULL);
+        return success ? true : false;
     }
 
-    return success;
+    /* Write the raw image. */
+    FILE* fp = fopen(filename, "wb");
+    if (!fp) {
+        printf(VG_LITE_PREFIX "Failed to open file %s\n", filename);
+        return false;
+    }
+
+    size_t size = buffer->height * buffer->stride;
+    size_t wr_size = fwrite(buffer->memory, 1, size, fp);
+    if (wr_size != size) {
+        printf(VG_LITE_PREFIX "Failed to write image data, write size: %zu, expected size: %zu\n", wr_size, size);
+        fclose(fp);
+        return false;
+    }
+
+    fclose(fp);
+    return true;
 }
 
 static void get_format_bytes(
