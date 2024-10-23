@@ -342,7 +342,7 @@ static void show_usage(const char* progname)
     printf("  --matrix <string> Matrix arguments in the format of 'm[3][3]' (e.g. '1,0,0,0,1,0,0,0,1').\n");
     printf("  --pattern-matrix <string> Pattern matrix arguments in the format of 'm[3][3]' (e.g. '1,0,0,0,1,0,0,0,1').\n");
     printf("  --rect <string> Rectangle arguments in the format of 'x,y,width,height' (e.g. '0,0,100,100').\n");
-    printf("  --path-bounding-box <string> Path bonding box arguments in the format of 'min_x,min_y,max_x,max_y' (e.g. '0,0,100,100').\n");
+    printf("  --path-bounding-box <string> Path bounding box arguments in the format of 'min_x,min_y,max_x,max_y' (e.g. '0,0,100,100').\n");
     printf("  --blend <string> Blend mode, see enum vg_lite_blend_t.\n");
     printf("  --fill-rule <string> Fill rule, see enum vg_lite_fill_t.\n");
     printf("  --filter <string> Filter', see enum vg_lite_filter_t.\n");
