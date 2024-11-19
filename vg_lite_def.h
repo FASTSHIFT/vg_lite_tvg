@@ -41,7 +41,10 @@ static inline void* lv_malloc_zeroed(size_t size)
     return ptr;
 }
 
+#define LV_LOG_USER printf
 #define LV_LOG_ERROR printf
+#define LV_LOG_WARN printf
+#define LV_LOG_INFO printf
 #define LV_LOG_TRACE printf
 
 #define LV_UNUSED(x) (void)(x)
