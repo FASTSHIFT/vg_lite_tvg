@@ -2070,6 +2070,14 @@ Empty_sequence_handler:
         return VG_LITE_SUCCESS;
     }
 
+    vg_lite_error_t vg_lite_gaussian_filter(vg_lite_float_t w0, vg_lite_float_t w1, vg_lite_float_t w2)
+    {
+        LV_UNUSED(w0);
+        LV_UNUSED(w1);
+        LV_UNUSED(w2);
+        return VG_LITE_NOT_SUPPORT;
+    }
+
     vg_lite_error_t vg_lite_get_mem_size(vg_lite_uint32_t * size)
     {
         *size = 0;
