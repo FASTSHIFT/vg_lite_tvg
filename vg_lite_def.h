@@ -58,7 +58,7 @@ static inline void* lv_malloc_zeroed(size_t size)
 #endif
 
 /*Enable Linear gradient extension support*/
-#define LV_VG_LITE_THORVG_LINEAR_GRADIENT_EXT_SUPPORT 0
+#define LV_VG_LITE_THORVG_LINEAR_GRADIENT_EXT_SUPPORT 1
 
 /*Enable 16 pixels alignment*/
 #define LV_VG_LITE_THORVG_16PIXELS_ALIGN 1
