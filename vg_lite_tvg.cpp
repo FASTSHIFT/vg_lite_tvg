@@ -2396,21 +2396,18 @@ static Result shape_set_stroke(std::unique_ptr<Shape> & shape, const vg_lite_pat
             return Result::InvalidArguments;
     }
 
-    LV_UNUSED(stroke_cap_conv);
-    LV_UNUSED(stroke_join_conv);
-#if 0
     LV_ASSERT_NULL(path->stroke);
-    TVG_CHECK_RETURN_RESULT(shape->stroke(path->stroke->line_width));
+    TVG_CHECK_RETURN_RESULT(shape->strokeWidth(path->stroke->line_width));
     TVG_CHECK_RETURN_RESULT(shape->strokeMiterlimit(path->stroke->miter_limit));
-    TVG_CHECK_RETURN_RESULT(shape->stroke(stroke_cap_conv(path->stroke->cap_style)));
-    TVG_CHECK_RETURN_RESULT(shape->stroke(stroke_join_conv(path->stroke->join_style)));
-    TVG_CHECK_RETURN_RESULT(shape->stroke(TVG_COLOR(path->stroke_color)));
+    TVG_CHECK_RETURN_RESULT(shape->strokeCap(stroke_cap_conv(path->stroke->cap_style)));
+    TVG_CHECK_RETURN_RESULT(shape->strokeJoin(stroke_join_conv(path->stroke->join_style)));
+    TVG_CHECK_RETURN_RESULT(shape->strokeFill(TVG_COLOR(path->stroke_color)));
 
     if(path->stroke->pattern_count) {
         LV_ASSERT_NULL(path->stroke->dash_pattern);
-        TVG_CHECK_RETURN_RESULT(shape->stroke(path->stroke->dash_pattern, path->stroke->pattern_count));
+        TVG_CHECK_RETURN_RESULT(shape->strokeDash(path->stroke->dash_pattern, path->stroke->pattern_count));
     }
-#endif
+
     return Result::Success;
 }
 
